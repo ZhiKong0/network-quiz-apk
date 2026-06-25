@@ -1,5 +1,6 @@
-# v2.10.14
+# v2.10.15
 
+- Auto release after fix: Release hook: ignore generated update metadata when gating auto release
 - Auto release after fix: Updater: auto-check on every app open and harden release hygiene
 - Auto release after fix: Polish option-wise explanations and updater state for v2.10.11
 - 修复多选题答案页的逐项理由展示：每个选项现在都会单独高亮显示对错依据，更容易一眼看懂。
