@@ -156,6 +156,20 @@ function Invoke-GhWithRetry([scriptblock]$command, [string]$errorMessage, [int]$
     throw $errorMessage
 }
 
+function Invoke-JsDelivrMetadataPurge([string]$repoSlug) {
+    $purgeUrl = "https://purge.jsdelivr.net/gh/$repoSlug@main/release/network_quiz_update.json"
+    try {
+        $response = Invoke-WebRequest -Uri $purgeUrl -UseBasicParsing -TimeoutSec 30
+        if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 300) {
+            Write-Host "jsDelivr metadata purge requested:" $purgeUrl
+            return
+        }
+        Write-Warning "jsDelivr metadata purge returned HTTP $($response.StatusCode): $purgeUrl"
+    } catch {
+        Write-Warning ("jsDelivr metadata purge failed: " + $_.Exception.Message)
+    }
+}
+
 Ensure-GitHubAuth
 Ensure-GitRepository
 Ensure-InitialCommit
@@ -205,6 +219,8 @@ try {
         Remove-Item $metadataUploadPath -Force -ErrorAction SilentlyContinue
     }
 }
+
+Invoke-JsDelivrMetadataPurge -repoSlug $RepoSlug
 
 $releaseUrl = $release.html_url
 Write-Host "Release published:" $tag

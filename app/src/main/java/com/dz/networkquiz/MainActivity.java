@@ -4602,8 +4602,9 @@ public class MainActivity extends Activity {
         metaLp.topMargin = dp(10);
         panel.addView(meta, metaLp);
 
-        if (!info.validationNotes.isEmpty()) {
-            TextView notice = text("提示： " + info.validationNotes.get(0), 12, AMBER, false);
+        String updateNotice = buildUpdateDialogNotice(info);
+        if (updateNotice.length() > 0) {
+            TextView notice = text(updateNotice, 12, updateDialogNoticeColor(info), false);
             notice.setLineSpacing(dp(3), 1.0f);
             LinearLayout.LayoutParams noticeLp = new LinearLayout.LayoutParams(-1, -2);
             noticeLp.topMargin = dp(8);
@@ -4667,6 +4668,41 @@ public class MainActivity extends Activity {
             dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         }
         dialog.show();
+    }
+
+    private String buildUpdateDialogNotice(UpdateInfo info) {
+        if (info == null || info.validationNotes.isEmpty()) return "";
+        String raw = info.validationNotes.get(0);
+        if (raw == null) return "";
+        raw = raw.trim();
+        if (raw.length() == 0) return "";
+        if (raw.startsWith("network_quiz_update.json 读取失败，已回退到直接识别 APK：")) {
+            return "补充说明：版本和安装包已经识别完成，附加元数据读取较慢，不影响下载和安装。";
+        }
+        if (raw.startsWith("加速更新元数据读取失败，已回退到 GitHub Release：")) {
+            return "补充说明：加速通道响应较慢，已自动切换到 GitHub Release 检查。";
+        }
+        if (raw.startsWith("Release 未附带 network_quiz_update.json")) {
+            return "补充说明：这个版本未附带额外元数据，已直接根据 APK 识别更新。";
+        }
+        if (raw.startsWith("未提供更新元数据文件")) {
+            return "补充说明：安装前无法提前核验包名，但仍可继续下载更新。";
+        }
+        return "提示： " + raw;
+    }
+
+    private int updateDialogNoticeColor(UpdateInfo info) {
+        if (info == null || info.validationNotes.isEmpty()) return MUTED;
+        String raw = info.validationNotes.get(0);
+        if (raw == null) return MUTED;
+        raw = raw.trim();
+        if (raw.startsWith("network_quiz_update.json 读取失败，已回退到直接识别 APK：")
+                || raw.startsWith("加速更新元数据读取失败，已回退到 GitHub Release：")
+                || raw.startsWith("Release 未附带 network_quiz_update.json")
+                || raw.startsWith("未提供更新元数据文件")) {
+            return BLUE;
+        }
+        return AMBER;
     }
 
     private void downloadAndInstallUpdate(final UpdateInfo info) {
