@@ -1,5 +1,6 @@
-# v2.10.11
+# v2.10.12
 
+- Auto release after fix: Polish option-wise explanations and updater state for v2.10.11
 - 修复多选题答案页的逐项理由展示：每个选项现在都会单独高亮显示对错依据，更容易一眼看懂。
 - 继续精修 75 道多选题的“选项判断”文案，减少脚本腔，补强贴题表达。
 - 修复更新状态文案：当本机版本比 GitHub latest 更新时，会明确提示“本机版本较新”，不再误导成“无可更新”。
