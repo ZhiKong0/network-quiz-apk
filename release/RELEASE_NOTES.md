@@ -1,5 +1,6 @@
-# v2.10.16
+# v2.10.17
 
+- Auto release after fix: Updater: soften fallback notice and purge jsDelivr metadata
 - Auto release after fix: Updater: fix auto-update network gate and prefer fresh fast metadata
 - Auto release after fix: Release hook: ignore generated update metadata when gating auto release
 - Auto release after fix: Updater: auto-check on every app open and harden release hygiene
