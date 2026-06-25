@@ -1,10 +1,10 @@
 {
   "packageName": "com.dz.networkquiz",
-  "versionCode": 32,
-  "versionName": "2.10.7",
+  "versionCode": 33,
+  "versionName": "2.10.8",
   "apkFileName": "计算机网络复习宝典.apk",
   "apkDownloadUrl": "",
-  "releaseNotes": "# v2.10.7\n\n- Auto release after fix: Updater: auto-check on app launch\n- Auto release after fix: Updater: default repo fallback and ready-state copy\n- Auto release after fix: Fallback to APK matching when metadata fetch times out\n- Auto release after fix: Fail auto release when git push does not succeed\n- Auto release after fix: Tighten updater cleanup and fix metadata asset upload\n- Auto release after fix: Fix updater cleanup fallback and add auto release hooks\n- 新增基于 GitHub Release 的联网检查更新入口。\n- 支持应用内下载 APK、调起系统安装流程，并在写入安装会话后自动清理缓存安装包。\n- 设置页新增 GitHub 更新仓库配置，支持填写 `owner/repo` 或完整 GitHub 链接。",
-  "sha256": "9b452659350fe10c8f7a204056e09fe8895053c96a7091992459ac00c7cc97ec",
-  "generatedAt": "2026-06-25T05:22:15.584393+00:00"
+  "releaseNotes": "# v2.10.8\n\n- Auto release after fix: Updater: delayed auto-check with looser network gate\n- Auto release after fix: Updater: auto-check on app launch\n- Auto release after fix: Updater: default repo fallback and ready-state copy\n- Auto release after fix: Fallback to APK matching when metadata fetch times out\n- Auto release after fix: Fail auto release when git push does not succeed\n- Auto release after fix: Tighten updater cleanup and fix metadata asset upload\n- Auto release after fix: Fix updater cleanup fallback and add auto release hooks\n- 新增基于 GitHub Release 的联网检查更新入口。\n- 支持应用内下载 APK、调起系统安装流程，并在写入安装会话后自动清理缓存安装包。\n- 设置页新增 GitHub 更新仓库配置，支持填写 `owner/repo` 或完整 GitHub 链接。",
+  "sha256": "20865a93d706e31a57e0c61fbe389c3597c13339b5f0e9eed65777b2a4faf958",
+  "generatedAt": "2026-06-25T05:26:54.156474+00:00"
 }

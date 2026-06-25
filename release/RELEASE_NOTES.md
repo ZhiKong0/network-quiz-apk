@@ -1,5 +1,6 @@
-# v2.10.7
+# v2.10.8
 
+- Auto release after fix: Updater: delayed auto-check with looser network gate
 - Auto release after fix: Updater: auto-check on app launch
 - Auto release after fix: Updater: default repo fallback and ready-state copy
 - Auto release after fix: Fallback to APK matching when metadata fetch times out
