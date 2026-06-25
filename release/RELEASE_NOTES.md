@@ -1,5 +1,6 @@
-# v2.10.15
+# v2.10.16
 
+- Auto release after fix: Updater: fix auto-update network gate and prefer fresh fast metadata
 - Auto release after fix: Release hook: ignore generated update metadata when gating auto release
 - Auto release after fix: Updater: auto-check on every app open and harden release hygiene
 - Auto release after fix: Polish option-wise explanations and updater state for v2.10.11

@@ -1,18 +1,18 @@
 {
   "packageName": "com.dz.networkquiz",
-  "versionCode": 40,
-  "versionName": "2.10.15",
+  "versionCode": 41,
+  "versionName": "2.10.16",
   "apkFileName": "review-baodian.apk",
   "apkDownloadUrl": "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
   "apkDownloadCandidates": [
     "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
     "https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
-    "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.15/review-baodian.apk",
-    "https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.15/review-baodian.apk"
+    "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.16/review-baodian.apk",
+    "https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.16/review-baodian.apk"
   ],
   "releaseHtmlUrl": "https://github.com/ZhiKong0/review-baodian-apk/releases/latest",
-  "releaseNotes": "# v2.10.15\n\n- Auto release after fix: Release hook: ignore generated update metadata when gating auto release\n- Auto release after fix: Updater: auto-check on every app open and harden release hygiene\n- Auto release after fix: Polish option-wise explanations and updater state for v2.10.11\n- 修复多选题答案页的逐项理由展示：每个选项现在都会单独高亮显示对错依据，更容易一眼看懂。\n- 继续精修 75 道多选题的“选项判断”文案，减少脚本腔，补强贴题表达。\n- 修复更新状态文案：当本机版本比 GitHub latest 更新时，会明确提示“本机版本较新”，不再误导成“无可更新”。\n- 统一本地 release 元数据输出，APK 资产名固定为 `review-baodian.apk`，避免中文文件名带来的更新识别问题。",
-  "apkSize": 981479,
-  "sha256": "8c5ed39ab1938f2a37e8832d620aa22816206848fa4b7adb839e802da27f7c94",
-  "generatedAt": "2026-06-25T14:21:33.671316+00:00"
+  "releaseNotes": "# v2.10.16\n\n- Auto release after fix: Updater: fix auto-update network gate and prefer fresh fast metadata\n- Auto release after fix: Release hook: ignore generated update metadata when gating auto release\n- Auto release after fix: Updater: auto-check on every app open and harden release hygiene\n- Auto release after fix: Polish option-wise explanations and updater state for v2.10.11\n- 修复多选题答案页的逐项理由展示：每个选项现在都会单独高亮显示对错依据，更容易一眼看懂。\n- 继续精修 75 道多选题的“选项判断”文案，减少脚本腔，补强贴题表达。\n- 修复更新状态文案：当本机版本比 GitHub latest 更新时，会明确提示“本机版本较新”，不再误导成“无可更新”。\n- 统一本地 release 元数据输出，APK 资产名固定为 `review-baodian.apk`，避免中文文件名带来的更新识别问题。",
+  "apkSize": 981478,
+  "sha256": "1088ebcb373846a8fe131d3b4bad3afd263b8ce313ce5ad5d74b7d975864c7c7",
+  "generatedAt": "2026-06-25T14:55:59.807890+00:00"
 }
