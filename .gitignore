@@ -9,3 +9,9 @@ __pycache__/
 Thumbs.db
 .DS_Store
 explanation_work/questions.before_*.json
+explanation_work/refine_multi_option_reasons_v2_*.py
+explanation_work/audit_multi_option_reason_quality_v2_*.py
+explanation_work/v2_*_multi_option_*_report.md
+explanation_work/v2_*_multi_option_*_audit.md
+_sim_screen*.png
+_sim_window_dump*.xml

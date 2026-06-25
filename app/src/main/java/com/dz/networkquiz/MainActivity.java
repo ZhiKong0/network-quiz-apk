@@ -105,6 +105,7 @@ public class MainActivity extends Activity {
     private static final String UPDATE_STATUS_UPDATED_TO_PREFIX = "\u5df2\u66f4\u65b0\u5230 ";
     private static final int HTTP_TIMEOUT_MS = 15000;
     private static final int FAST_HTTP_TIMEOUT_MS = 6000;
+    private static final long AUTO_UPDATE_CHECK_INTERVAL_MS = 12 * 1000L;
     private static final int DEFAULT_WRONG_REQUIRED = 2;
     private static final int MIN_WRONG_REQUIRED = 1;
     private static final int MAX_WRONG_REQUIRED = 10;
@@ -183,8 +184,8 @@ public class MainActivity extends Activity {
     private boolean questionSeekSyncing = false;
     private boolean suppressQuestionPageSwipe = false;
     private boolean updateBusy = false;
-    private boolean autoUpdateCheckTriggered = false;
     private boolean autoUpdateCheckScheduled = false;
+    private long lastAutoUpdateCheckElapsedRealtimeMs = 0L;
     private String updateRepoSlug = "";
     private String updateStatusText = UPDATE_STATUS_NOT_CHECKED;
     private String pendingInstallApkPath = null;
@@ -628,16 +629,19 @@ public class MainActivity extends Activity {
         installQuestionPageSwipeProxy(imageList);
         contentContainer.addView(imageList, new LinearLayout.LayoutParams(-1, -2));
 
-        memoryReasonContainer = new LinearLayout(this);
-        memoryReasonContainer.setOrientation(LinearLayout.VERTICAL);
-        memoryReasonContainer.setVisibility(View.GONE);
-        installQuestionPageSwipeProxy(memoryReasonContainer);
-        contentContainer.addView(memoryReasonContainer, new LinearLayout.LayoutParams(-1, -2));
-
         optionList = new LinearLayout(this);
         optionList.setOrientation(LinearLayout.VERTICAL);
         optionList.setPadding(0, dp(16), 0, dp(8));
         contentContainer.addView(optionList, new LinearLayout.LayoutParams(-1, -2));
+
+        memoryReasonContainer = new LinearLayout(this);
+        memoryReasonContainer.setOrientation(LinearLayout.VERTICAL);
+        memoryReasonContainer.setPadding(dp(16), dp(14), dp(16), dp(16));
+        memoryReasonContainer.setBackground(roundedStrokeBackground(PANEL_ELEVATED, GLASS_STROKE, 26, 1));
+        memoryReasonContainer.setElevation(dp(2));
+        memoryReasonContainer.setVisibility(View.GONE);
+        installQuestionPageSwipeProxy(memoryReasonContainer);
+        contentContainer.addView(memoryReasonContainer, new LinearLayout.LayoutParams(-1, -2));
 
         submitButton = bigButton("提交", true);
         submitButton.setOnClickListener(new View.OnClickListener() {
@@ -1477,6 +1481,8 @@ public class MainActivity extends Activity {
         lastAnswerOk = null;
         optionList.removeAllViews();
         imageList.removeAllViews();
+        memoryReasonContainer.removeAllViews();
+        memoryReasonContainer.setVisibility(View.GONE);
         feedbackContainer.removeAllViews();
         submitButton.setVisibility(View.GONE);
 
@@ -1524,6 +1530,8 @@ public class MainActivity extends Activity {
         lastAnswerOk = null;
         optionList.removeAllViews();
         imageList.removeAllViews();
+        memoryReasonContainer.removeAllViews();
+        memoryReasonContainer.setVisibility(View.GONE);
         feedbackContainer.removeAllViews();
         feedbackContainer.setVisibility(View.GONE);
         submitButton.setVisibility(View.GONE);
@@ -1599,6 +1607,38 @@ public class MainActivity extends Activity {
         countRowLp.topMargin = dp(12);
         wrongRuleCard.addView(countRow, countRowLp);
         optionList.addView(wrongRuleCard, new LinearLayout.LayoutParams(-1, -2));
+        addSettingsSectionTitle(optionList, "导出与分享", "");
+        LinearLayout exportCard = settingsCard();
+        addSettingsActionCardButton(exportCard, "分享当前题目", false, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                shareCurrentQuestion();
+            }
+        });
+        addSettingsActionCardButton(exportCard, "导出错题本 Markdown", false, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                exportWrongQuestions();
+            }
+        });
+        addSettingsActionCardButton(exportCard, "导出当前章节卡片", false, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (currentCardChapter == null) {
+                    exportAllChapterCards();
+                } else {
+                    exportChapterCard(currentCardChapter);
+                }
+            }
+        });
+        addSettingsActionCardButton(exportCard, "导出全部章节卡片", true, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                exportAllChapterCards();
+            }
+        });
+        optionList.addView(exportCard, new LinearLayout.LayoutParams(-1, -2));
+
         addSettingsSectionTitle(optionList, "版本更新", "");
         LinearLayout updateCard = settingsCard();
         updateVersionLineView = settingsValueLine("当前版本", currentVersionSummary());
@@ -1633,38 +1673,6 @@ public class MainActivity extends Activity {
         updateCard.addView(configRepoButton, configRepoLp);
         optionList.addView(updateCard, new LinearLayout.LayoutParams(-1, -2));
         refreshUpdateSettingViews();
-
-        addSettingsSectionTitle(optionList, "导出与分享", "");
-        LinearLayout exportCard = settingsCard();
-        addSettingsActionCardButton(exportCard, "分享当前题目", false, new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                shareCurrentQuestion();
-            }
-        });
-        addSettingsActionCardButton(exportCard, "导出错题本 Markdown", false, new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                exportWrongQuestions();
-            }
-        });
-        addSettingsActionCardButton(exportCard, "导出当前章节卡片", false, new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (currentCardChapter == null) {
-                    exportAllChapterCards();
-                } else {
-                    exportChapterCard(currentCardChapter);
-                }
-            }
-        });
-        addSettingsActionCardButton(exportCard, "导出全部章节卡片", true, new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                exportAllChapterCards();
-            }
-        });
-        optionList.addView(exportCard, new LinearLayout.LayoutParams(-1, -2));
 
         scrollView.post(new Runnable() {
             @Override
@@ -2592,9 +2600,10 @@ public class MainActivity extends Activity {
             memoryReasonContainer.setVisibility(View.GONE);
             return;
         }
-        renderMarkdown(memoryReasonContainer, "## 理由\n\n" + markdown);
+        renderMarkdown(memoryReasonContainer, "## 理由与辨析\n\n" + markdown);
         LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) memoryReasonContainer.getLayoutParams();
         if (lp != null) {
+            lp.topMargin = dp(12);
             lp.bottomMargin = dp(8);
             memoryReasonContainer.setLayoutParams(lp);
         }
@@ -4028,7 +4037,7 @@ public class MainActivity extends Activity {
     }
 
     private void scheduleAutoUpdateCheck() {
-        if (autoUpdateCheckTriggered || autoUpdateCheckScheduled) return;
+        if (autoUpdateCheckScheduled) return;
         if (rootFrame == null) return;
         autoUpdateCheckScheduled = true;
         rootFrame.postDelayed(new Runnable() {
@@ -4041,13 +4050,24 @@ public class MainActivity extends Activity {
     }
 
     private void maybeAutoCheckForUpdates() {
-        if (autoUpdateCheckTriggered) return;
         if (updateBusy) return;
         if (!hasUpdateRepoConfig()) return;
         if (pendingInstallApkPath != null && pendingInstallApkPath.trim().length() > 0) return;
         if (!hasUsableNetworkConnection()) return;
-        autoUpdateCheckTriggered = true;
+        if (!shouldRunAutoUpdateCheckNow()) return;
+        markAutoUpdateCheckStarted();
         checkForUpdates(false);
+    }
+
+    private boolean shouldRunAutoUpdateCheckNow() {
+        long now = SystemClock.elapsedRealtime();
+        return lastAutoUpdateCheckElapsedRealtimeMs <= 0L
+                || now < lastAutoUpdateCheckElapsedRealtimeMs
+                || now - lastAutoUpdateCheckElapsedRealtimeMs >= AUTO_UPDATE_CHECK_INTERVAL_MS;
+    }
+
+    private void markAutoUpdateCheckStarted() {
+        lastAutoUpdateCheckElapsedRealtimeMs = SystemClock.elapsedRealtime();
     }
 
     private boolean hasUsableNetworkConnection() {

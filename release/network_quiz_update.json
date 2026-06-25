@@ -1,18 +1,18 @@
 {
   "packageName": "com.dz.networkquiz",
-  "versionCode": 37,
-  "versionName": "2.10.12",
+  "versionCode": 38,
+  "versionName": "2.10.13",
   "apkFileName": "review-baodian.apk",
-  "apkDownloadUrl": "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
+  "apkDownloadUrl": "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.13/review-baodian.apk",
   "apkDownloadCandidates": [
+    "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.13/review-baodian.apk",
+    "https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.13/review-baodian.apk",
     "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
-    "https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
-    "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.12/review-baodian.apk",
-    "https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.12/review-baodian.apk"
+    "https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk"
   ],
-  "releaseHtmlUrl": "https://github.com/ZhiKong0/review-baodian-apk/releases/latest",
-  "releaseNotes": "# v2.10.12\n\n- Auto release after fix: Polish option-wise explanations and updater state for v2.10.11\n- 修复多选题答案页的逐项理由展示：每个选项现在都会单独高亮显示对错依据，更容易一眼看懂。\n- 继续精修 75 道多选题的“选项判断”文案，减少脚本腔，补强贴题表达。\n- 修复更新状态文案：当本机版本比 GitHub latest 更新时，会明确提示“本机版本较新”，不再误导成“无可更新”。\n- 统一本地 release 元数据输出，APK 资产名固定为 `review-baodian.apk`，避免中文文件名带来的更新识别问题。",
+  "releaseHtmlUrl": "https://github.com/ZhiKong0/review-baodian-apk/releases/tag/v2.10.13",
+  "releaseNotes": "# v2.10.13\n\n- Auto release after fix: Polish option-wise explanations and updater state for v2.10.11\n- 修复多选题答案页的逐项理由展示：每个选项现在都会单独高亮显示对错依据，更容易一眼看懂。\n- 继续精修 75 道多选题的“选项判断”文案，减少脚本腔，补强贴题表达。\n- 修复更新状态文案：当本机版本比 GitHub latest 更新时，会明确提示“本机版本较新”，不再误导成“无可更新”。\n- 统一本地 release 元数据输出，APK 资产名固定为 `review-baodian.apk`，避免中文文件名带来的更新识别问题。",
   "apkSize": 981479,
-  "sha256": "e17b39ea98f418ec5d47277c39e7ea9a5d4a4f08c04e65b056ae91267dda511f",
-  "generatedAt": "2026-06-25T11:41:13.304278+00:00"
+  "sha256": "ae201d65d3322888e0e4de3713412b8864ba7e12b6b148e55355ea1a317bf1de",
+  "generatedAt": "2026-06-25T13:19:49.737695+00:00"
 }

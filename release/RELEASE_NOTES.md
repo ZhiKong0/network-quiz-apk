@@ -1,4 +1,4 @@
-# v2.10.12
+# v2.10.13
 
 - Auto release after fix: Polish option-wise explanations and updater state for v2.10.11
 - 修复多选题答案页的逐项理由展示：每个选项现在都会单独高亮显示对错依据，更容易一眼看懂。
