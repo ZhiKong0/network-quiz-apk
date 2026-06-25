@@ -109,7 +109,6 @@ public class MainActivity extends Activity {
     private static final String UPDATE_STATUS_UPDATED_TO_PREFIX = "\u5df2\u66f4\u65b0\u5230 ";
     private static final int HTTP_TIMEOUT_MS = 15000;
     private static final int FAST_HTTP_TIMEOUT_MS = 6000;
-    private static final long AUTO_UPDATE_CHECK_INTERVAL_MS = 12 * 1000L;
     private static final int DEFAULT_WRONG_REQUIRED = 2;
     private static final int MIN_WRONG_REQUIRED = 1;
     private static final int MAX_WRONG_REQUIRED = 10;
@@ -189,7 +188,6 @@ public class MainActivity extends Activity {
     private boolean suppressQuestionPageSwipe = false;
     private boolean updateBusy = false;
     private boolean autoUpdateCheckScheduled = false;
-    private long lastAutoUpdateCheckElapsedRealtimeMs = 0L;
     private String updateRepoSlug = "";
     private String updateStatusText = UPDATE_STATUS_NOT_CHECKED;
     private String pendingInstallApkPath = null;
@@ -4086,25 +4084,8 @@ public class MainActivity extends Activity {
             logUpdateDebug("skip auto check because network is unavailable");
             return;
         }
-        if (!shouldRunAutoUpdateCheckNow()) {
-            logUpdateDebug("skip auto check because interval gate not reached");
-            return;
-        }
-        markAutoUpdateCheckStarted();
         logUpdateDebug("auto check starts now");
         checkForUpdates(false);
-    }
-
-    private boolean shouldRunAutoUpdateCheckNow() {
-        long now = SystemClock.elapsedRealtime();
-        return lastAutoUpdateCheckElapsedRealtimeMs <= 0L
-                || now < lastAutoUpdateCheckElapsedRealtimeMs
-                || now - lastAutoUpdateCheckElapsedRealtimeMs >= AUTO_UPDATE_CHECK_INTERVAL_MS;
-    }
-
-    private void markAutoUpdateCheckStarted() {
-        lastAutoUpdateCheckElapsedRealtimeMs = SystemClock.elapsedRealtime();
-        logUpdateDebug("mark auto check started at " + lastAutoUpdateCheckElapsedRealtimeMs);
     }
 
     private boolean hasUsableNetworkConnection() {
@@ -5039,7 +5020,7 @@ public class MainActivity extends Activity {
         prefs.edit()
                 .putString(PREF_PENDING_INSTALL_APK_PATH, pendingInstallApkPath == null ? "" : pendingInstallApkPath)
                 .putString(PREF_PENDING_INSTALL_VERSION_NAME, pendingInstallVersionName == null ? "" : pendingInstallVersionName)
-                .apply();
+                .commit();
     }
 
     private void clearPendingInstallState() {
@@ -5049,18 +5030,18 @@ public class MainActivity extends Activity {
         prefs.edit()
                 .remove(PREF_PENDING_INSTALL_APK_PATH)
                 .remove(PREF_PENDING_INSTALL_VERSION_NAME)
-                .apply();
+                .commit();
     }
 
     private void persistPendingUpdateCleanupPaths() {
         if (prefs == null) return;
         if (pendingUpdateCleanupPaths.isEmpty()) {
-            prefs.edit().remove(PREF_UPDATE_PENDING_CLEANUP).apply();
+            prefs.edit().remove(PREF_UPDATE_PENDING_CLEANUP).commit();
             return;
         }
         prefs.edit()
                 .putStringSet(PREF_UPDATE_PENDING_CLEANUP, new LinkedHashSet<>(pendingUpdateCleanupPaths))
-                .apply();
+                .commit();
     }
 
     private void rememberPendingCleanupPath(String path) {
