@@ -181,6 +181,7 @@ public class MainActivity extends Activity {
     private boolean suppressQuestionPageSwipe = false;
     private boolean updateBusy = false;
     private boolean autoUpdateCheckTriggered = false;
+    private boolean autoUpdateCheckScheduled = false;
     private String updateRepoSlug = "";
     private String updateStatusText = UPDATE_STATUS_NOT_CHECKED;
     private String pendingInstallApkPath = null;
@@ -241,7 +242,7 @@ public class MainActivity extends Activity {
         buildLayout();
         applySystemBars();
         showAllMode();
-        maybeAutoCheckForUpdates();
+        scheduleAutoUpdateCheck();
     }
 
     @Override
@@ -249,7 +250,7 @@ public class MainActivity extends Activity {
         super.onResume();
         cleanupUpdateCache(null);
         maybeResumePendingInstall();
-        maybeAutoCheckForUpdates();
+        scheduleAutoUpdateCheck();
     }
 
     @Override
@@ -3969,6 +3970,19 @@ public class MainActivity extends Activity {
         }).start();
     }
 
+    private void scheduleAutoUpdateCheck() {
+        if (autoUpdateCheckTriggered || autoUpdateCheckScheduled) return;
+        if (rootFrame == null) return;
+        autoUpdateCheckScheduled = true;
+        rootFrame.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                autoUpdateCheckScheduled = false;
+                maybeAutoCheckForUpdates();
+            }
+        }, 1800L);
+    }
+
     private void maybeAutoCheckForUpdates() {
         if (autoUpdateCheckTriggered) return;
         if (updateBusy) return;
@@ -3988,7 +4002,11 @@ public class MainActivity extends Activity {
             NetworkCapabilities capabilities = manager.getNetworkCapabilities(network);
             if (capabilities == null) return false;
             return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                    && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+                    && (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                    || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                    || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+                    || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                    || capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED));
         } catch (Exception e) {
             return false;
         }
