@@ -3,6 +3,7 @@ package com.dz.networkquiz;
 import android.app.Activity;
 import android.app.Dialog;
 import android.app.PendingIntent;
+import android.animation.ValueAnimator;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
 import android.content.ClipData;
@@ -29,6 +30,9 @@ import android.os.Bundle;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.text.InputType;
+import android.text.Layout;
+import android.text.StaticLayout;
+import android.text.TextPaint;
 import android.text.TextUtils;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
@@ -443,6 +447,7 @@ public class MainActivity extends Activity {
                         ""));
             }
             applyMemoryCardOverrides();
+            ensureAllCardsHaveMindMaps();
         } catch (Exception ignored) {
             allMemoryCards.clear();
         }
@@ -614,7 +619,8 @@ public class MainActivity extends Activity {
                     obj.optString("title", ""),
                     obj.optString("summary", ""),
                     obj.optString("badge", ""),
-                    jsonStringList(obj.optJSONArray("points"))));
+                    jsonStringList(obj.optJSONArray("points")),
+                    jsonMindMapNodes(obj.optJSONArray("children"))));
         }
         return nodes;
     }
@@ -627,6 +633,412 @@ public class MainActivity extends Activity {
             }
         }
         return cards;
+    }
+
+    private void ensureAllCardsHaveMindMaps() {
+        for (int i = 0; i < allMemoryCards.size(); i++) {
+            MemoryCard card = allMemoryCards.get(i);
+            List<MindMapNode> nodes = card.hasMindMap()
+                    ? normalizeMindMapNodes(card.mindMapNodes, 0)
+                    : buildGeneratedMindMapNodes(card);
+            String title = cleanMindMapText(card.mindMapTitle.length() > 0 ? card.mindMapTitle : card.knowledge);
+            allMemoryCards.set(i, new MemoryCard(
+                    card.chapter,
+                    card.knowledge,
+                    card.questionCount,
+                    card.labels,
+                    card.layerHint,
+                    card.chapterMap,
+                    card.typeDistribution,
+                    card.eyeLines,
+                    card.selfChecks,
+                    card.corePoints,
+                    card.mustRemember,
+                    card.traps,
+                    card.questionTips,
+                    card.frontMarkdown,
+                    card.backMarkdown,
+                    card.overviewCard,
+                    title,
+                    nodes));
+        }
+    }
+
+    private List<MindMapNode> buildGeneratedMindMapNodes(MemoryCard card) {
+        if (card.usesRichNotebookCard()) {
+            List<MindMapNode> markdownNodes = buildMarkdownMindMapNodes(card);
+            if (!markdownNodes.isEmpty()) {
+                return markdownNodes;
+            }
+        }
+
+        List<MindMapNode> nodes = new ArrayList<>();
+        if (card.layerHint.trim().length() > 0) {
+            nodes.add(branchFromText("层次定位", card.layerHint, card.questionCount + "题"));
+        }
+        if (card.chapterMap.trim().length() > 0) {
+            nodes.add(branchFromText("本章地图", card.chapterMap, card.chapter));
+        }
+        if (card.typeDistribution.trim().length() > 0) {
+            nodes.add(branchFromText("题型覆盖", card.typeDistribution, "覆盖面"));
+        }
+        if (!card.eyeLines.isEmpty()) {
+            nodes.add(branchFromList("先抓题眼", "先从题干关键字判断它在考哪一层、哪类协议或哪类设备。", "", card.eyeLines));
+        }
+        if (!card.selfChecks.isEmpty()) {
+            nodes.add(branchFromList("考场三问", "做题前先自问这三句，能大幅减少概念串层。", "", card.selfChecks));
+        }
+        if (!card.corePoints.isEmpty()) {
+            nodes.add(branchFromList("核心知识点", "这部分是本组题最该先吃透的底层知识。", "", card.corePoints));
+        }
+        if (!card.mustRemember.isEmpty()) {
+            nodes.add(branchFromList("必须背会", "常考标准词、固定数字、关键缩写通常都在这里。", "", card.mustRemember));
+        }
+        if (!card.traps.isEmpty()) {
+            nodes.add(branchFromList("易错辨析", "这些地方最容易把相近概念、协议功能和层次定位混在一起。", "", card.traps));
+        }
+        if (!card.questionTips.isEmpty()) {
+            nodes.add(branchFromList("逐题覆盖", "这组分支直接对应这批题常见的出题角度和陷阱。", "", card.questionTips));
+        }
+
+        List<String> labelLines = new ArrayList<>();
+        LinkedHashSet<String> dedup = new LinkedHashSet<>();
+        addDelimitedLabels(dedup, card.labels);
+        labelLines.addAll(dedup);
+        if (!labelLines.isEmpty()) {
+            nodes.add(branchFromList("覆盖题号", "可用题号快速回定位这组题。", card.questionCount + "题", labelLines));
+        }
+
+        if (nodes.isEmpty()) {
+            nodes.add(branchFromText(card.knowledge, card.chapter + " / " + card.knowledge, card.questionCount + "题"));
+        }
+        return normalizeMindMapNodes(nodes, 0);
+    }
+
+    private List<MindMapNode> buildMarkdownMindMapNodes(MemoryCard card) {
+        List<MindMapNode> nodes = new ArrayList<>();
+        appendMarkdownMindMapNodes(nodes, card.frontMarkdown);
+        appendMarkdownMindMapNodes(nodes, card.backMarkdown);
+        return normalizeMindMapNodes(nodes, 0);
+    }
+
+    private void appendMarkdownMindMapNodes(List<MindMapNode> target, String markdown) {
+        if (target == null || markdown == null || markdown.trim().length() == 0) return;
+
+        List<MindMapDraftNode> drafts = new ArrayList<>();
+        MindMapDraftNode currentTop = null;
+        MindMapDraftNode currentChild = null;
+        StringBuilder introSummary = new StringBuilder();
+        List<String> introPoints = new ArrayList<>();
+
+        String[] lines = markdown.replace("\r\n", "\n").replace('\r', '\n').split("\n");
+        for (String rawLine : lines) {
+            String line = rawLine == null ? "" : rawLine.trim();
+            if (line.length() == 0) continue;
+
+            if (line.startsWith("### ")) {
+                String rawTitle = cleanMarkdownHeading(line.substring(4));
+                currentChild = new MindMapDraftNode(stripHeadingBadge(rawTitle));
+                currentChild.badge = extractHeadingBadge(rawTitle);
+                if (currentTop == null) {
+                    currentTop = new MindMapDraftNode("总览");
+                    drafts.add(currentTop);
+                }
+                currentTop.children.add(currentChild);
+                continue;
+            }
+
+            if (line.startsWith("## ")) {
+                String rawTitle = cleanMarkdownHeading(line.substring(3));
+                currentTop = new MindMapDraftNode(stripHeadingBadge(rawTitle));
+                currentTop.badge = extractHeadingBadge(rawTitle);
+                drafts.add(currentTop);
+                currentChild = null;
+                continue;
+            }
+
+            if (line.startsWith("# ")) {
+                String rawTitle = cleanMarkdownHeading(line.substring(2));
+                if (drafts.isEmpty() && introSummary.length() == 0 && introPoints.isEmpty()) {
+                    introSummary.append(stripHeadingBadge(rawTitle));
+                }
+                continue;
+            }
+
+            if (line.startsWith("- ") || line.startsWith("* ")) {
+                String bullet = cleanMindMapText(stripMarkdownDecoration(line.substring(2)));
+                if (bullet.length() == 0) continue;
+                if (currentChild != null) {
+                    currentChild.points.add(bullet);
+                } else if (currentTop != null) {
+                    currentTop.points.add(bullet);
+                } else {
+                    introPoints.add(bullet);
+                }
+                continue;
+            }
+
+            String paragraph = cleanMindMapText(stripMarkdownDecoration(line));
+            if (paragraph.length() == 0) continue;
+            if (currentChild != null) {
+                appendDraftSummary(currentChild, paragraph);
+            } else if (currentTop != null) {
+                appendDraftSummary(currentTop, paragraph);
+            } else {
+                if (introSummary.length() > 0) introSummary.append(" ");
+                introSummary.append(paragraph);
+            }
+        }
+
+        if (introSummary.length() > 0 || !introPoints.isEmpty()) {
+            MindMapDraftNode intro = new MindMapDraftNode("总览");
+            intro.badge = "导读";
+            intro.summary.append(cleanMindMapText(introSummary.toString()));
+            intro.points.addAll(introPoints);
+            target.add(draftToMindMapNode(intro));
+        }
+
+        for (MindMapDraftNode draft : drafts) {
+            target.add(draftToMindMapNode(draft));
+        }
+    }
+
+    private void appendDraftSummary(MindMapDraftNode node, String text) {
+        if (node == null || text == null || text.trim().length() == 0) return;
+        if (node.summary.length() > 0) node.summary.append(" ");
+        node.summary.append(text.trim());
+    }
+
+    private MindMapNode draftToMindMapNode(MindMapDraftNode draft) {
+        List<MindMapNode> children = new ArrayList<>();
+        for (MindMapDraftNode child : draft.children) {
+            children.add(draftToMindMapNode(child));
+        }
+        return new MindMapNode(
+                cleanMindMapText(draft.title),
+                cleanMindMapText(draft.summary.toString()),
+                cleanMindMapText(draft.badge),
+                new ArrayList<>(draft.points),
+                children);
+    }
+
+    private String cleanMarkdownHeading(String value) {
+        String cleaned = stripMarkdownDecoration(value);
+        cleaned = cleaned.replaceFirst("^\\d+[\\.、]\\s*", "").trim();
+        return cleaned;
+    }
+
+    private String stripHeadingBadge(String title) {
+        String cleaned = cleanMindMapText(title);
+        int left = Math.max(cleaned.lastIndexOf('（'), cleaned.lastIndexOf('('));
+        int right = Math.max(cleaned.lastIndexOf('）'), cleaned.lastIndexOf(')'));
+        if (left >= 0 && right > left && right == cleaned.length() - 1) {
+            return cleaned.substring(0, left).trim();
+        }
+        return cleaned;
+    }
+
+    private String extractHeadingBadge(String title) {
+        String cleaned = cleanMindMapText(title);
+        int left = Math.max(cleaned.lastIndexOf('（'), cleaned.lastIndexOf('('));
+        int right = Math.max(cleaned.lastIndexOf('）'), cleaned.lastIndexOf(')'));
+        if (left >= 0 && right > left && right == cleaned.length() - 1) {
+            return cleaned.substring(left + 1, right).trim();
+        }
+        return "";
+    }
+
+    private String stripMarkdownDecoration(String value) {
+        if (value == null) return "";
+        return value
+                .replace("**", "")
+                .replace("__", "")
+                .replace("`", "")
+                .replace("~~", "")
+                .replace("&nbsp;", " ")
+                .trim();
+    }
+
+    private List<MindMapNode> normalizeMindMapNodes(List<MindMapNode> nodes, int depth) {
+        List<MindMapNode> normalized = new ArrayList<>();
+        if (nodes == null) return normalized;
+        for (MindMapNode node : nodes) {
+            if (node == null) continue;
+            normalized.add(normalizeMindMapNode(node, depth));
+        }
+        return normalized;
+    }
+
+    private MindMapNode normalizeMindMapNode(MindMapNode node, int depth) {
+        List<String> points = new ArrayList<>();
+        if (node.points != null) {
+            for (String point : node.points) {
+                String cleaned = cleanMindMapText(point);
+                if (cleaned.length() > 0) {
+                    points.add(cleaned);
+                }
+            }
+        }
+        if (points.isEmpty()) {
+            List<String> fallback = splitMindMapText(node.summary);
+            if (fallback.isEmpty() && node.summary.trim().length() > 0) {
+                points.add(cleanMindMapText(node.summary));
+            } else {
+                points.addAll(fallback);
+            }
+        }
+
+        List<MindMapNode> children = normalizeMindMapNodes(node.children, depth + 1);
+        if (children.isEmpty()) {
+            children = autoChildrenFromList(points, depth + 1);
+            if (children.isEmpty() && node.summary.trim().length() > 0) {
+                children = autoChildrenFromText(node.summary, depth + 1);
+            }
+        }
+
+        return new MindMapNode(
+                cleanMindMapText(node.title),
+                cleanMindMapText(node.summary),
+                cleanMindMapText(node.badge),
+                points,
+                children);
+    }
+
+    private MindMapNode branchFromText(String title, String text, String badge) {
+        String summary = cleanMindMapText(text);
+        List<String> parts = splitMindMapText(summary);
+        List<String> points = new ArrayList<>();
+        if (parts.isEmpty()) {
+            if (summary.length() > 0) {
+                points.add(summary);
+            }
+        } else {
+            points.addAll(parts);
+        }
+        return new MindMapNode(
+                title,
+                summary,
+                badge,
+                points,
+                autoChildrenFromList(points, 1));
+    }
+
+    private MindMapNode branchFromList(String title, String summary, String badge, List<String> items) {
+        List<String> cleaned = new ArrayList<>();
+        for (String item : items) {
+            String value = cleanMindMapText(item);
+            if (value.length() > 0) {
+                cleaned.add(value);
+            }
+        }
+        return new MindMapNode(
+                title,
+                cleanMindMapText(summary),
+                badge,
+                cleaned,
+                autoChildrenFromList(cleaned, 1));
+    }
+
+    private List<MindMapNode> autoChildrenFromText(String text, int depth) {
+        return autoChildrenFromList(splitMindMapText(text), depth);
+    }
+
+    private List<MindMapNode> autoChildrenFromList(List<String> items, int depth) {
+        List<MindMapNode> children = new ArrayList<>();
+        if (items == null || items.isEmpty() || depth > 2) return children;
+        for (String item : items) {
+            String cleaned = cleanMindMapText(item);
+            if (cleaned.length() == 0) continue;
+            List<String> fragments = splitMindMapText(cleaned);
+            List<String> childPoints = new ArrayList<>();
+            if (fragments.size() <= 1) {
+                childPoints.add(cleaned);
+            } else {
+                childPoints.addAll(fragments);
+            }
+            List<MindMapNode> grandChildren = new ArrayList<>();
+            if (depth < 2 && fragments.size() > 1) {
+                for (String fragment : fragments) {
+                    String part = cleanMindMapText(fragment);
+                    if (part.length() == 0 || part.equals(cleaned)) continue;
+                    grandChildren.add(new MindMapNode(
+                            shortenMindMapTitle(part),
+                            part,
+                            "",
+                            Collections.singletonList(part),
+                            new ArrayList<MindMapNode>()));
+                }
+            }
+            children.add(new MindMapNode(
+                    shortenMindMapTitle(cleaned),
+                    cleaned,
+                    "",
+                    childPoints,
+                    grandChildren));
+        }
+        return children;
+    }
+
+    private List<String> splitMindMapText(String text) {
+        List<String> result = new ArrayList<>();
+        String normalized = cleanMindMapText(text);
+        if (normalized.length() == 0) return result;
+
+        String prepared = normalized.replace('\n', '；').replace('\r', '；');
+        String[] firstPass = prepared.split("[；;。！？!?]");
+        for (String part : firstPass) {
+            String cleaned = cleanMindMapText(part);
+            if (cleaned.length() == 0) continue;
+            if (cleaned.indexOf('、') >= 0 && cleaned.length() > 8) {
+                String[] secondPass = cleaned.split("[、]");
+                int added = 0;
+                for (String child : secondPass) {
+                    String fragment = cleanMindMapText(child);
+                    if (fragment.length() == 0) continue;
+                    result.add(fragment);
+                    added++;
+                }
+                if (added > 1) {
+                    continue;
+                }
+                if (added == 1) {
+                    result.remove(result.size() - 1);
+                }
+            }
+            result.add(cleaned);
+        }
+
+        if (result.isEmpty()) {
+            result.add(normalized);
+        }
+        return result;
+    }
+
+    private String cleanMindMapText(String text) {
+        if (text == null) return "";
+        String value = text.replace("\r\n", "\n").replace('\r', '\n').trim();
+        value = value.replaceAll("^[\\-•·\\d\\s\\.\\)\\(]+", "");
+        value = value.replaceAll("\\s+", " ").trim();
+        return value;
+    }
+
+    private String shortenMindMapTitle(String text) {
+        String value = cleanMindMapText(text);
+        if (value.length() == 0) return "要点";
+        int colon = value.indexOf('：');
+        if (colon < 0) colon = value.indexOf(':');
+        if (colon > 0 && colon <= 12) {
+            value = value.substring(0, colon).trim();
+        }
+        int comma = value.indexOf('，');
+        if (comma < 0) comma = value.indexOf(',');
+        if (comma > 0 && comma <= 18) {
+            value = value.substring(0, comma).trim();
+        }
+        if (value.length() > 18) {
+            value = value.substring(0, 18).trim() + "…";
+        }
+        return value;
     }
 
     private List<String> jsonStringList(JSONArray arr) {
@@ -977,7 +1389,7 @@ public class MainActivity extends Activity {
         if (!cardMode) {
             return handleQuestionPageSwipe(event);
         }
-        return handleCardNavigationTouch(target, event, true);
+        return handleCardNavigationTouch(target, event, false);
     }
 
     private boolean handleCardNavigationTouch(View target, MotionEvent event, boolean allowTapFlip) {
@@ -1240,7 +1652,7 @@ public class MainActivity extends Activity {
                 showWrongMode();
             }
         });
-        cardsNavButton = navButton("卡片", new View.OnClickListener() {
+        cardsNavButton = navButton("导图", new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 showCardMode(currentCardChapter);
@@ -1317,7 +1729,7 @@ public class MainActivity extends Activity {
         }
 
         if (cardMode) {
-            applyHeaderTitleStyle("卡片", AMBER);
+            applyHeaderTitleStyle("导图", AMBER);
             metaView.setVisibility(View.VISIBLE);
             questionSeekBar.setVisibility(View.GONE);
             progressPeekView.setVisibility(View.GONE);
@@ -1334,7 +1746,7 @@ public class MainActivity extends Activity {
                     showChapterCardsDialog();
                 }
             });
-            bindFilterActionButton(actionButton, "导出卡片", AMBER, new View.OnClickListener() {
+            bindFilterActionButton(actionButton, "导出导图", AMBER, new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     if (currentCardChapter == null) {
@@ -1680,28 +2092,21 @@ public class MainActivity extends Activity {
         if (visibleCards.isEmpty()) {
             if (filterRowView != null) filterRowView.setVisibility(View.VISIBLE);
             stemView.setVisibility(View.VISIBLE);
-            stemView.setText("当前没有卡片");
+            stemView.setText("当前没有可显示的思维导图");
             metaView.setText("请重新选择章节");
             return;
         }
         if (currentCardIndex < 0) currentCardIndex = 0;
         if (currentCardIndex >= visibleCards.size()) currentCardIndex = visibleCards.size() - 1;
         MemoryCard card = visibleCards.get(currentCardIndex);
-        final boolean allowTapFlip = !(cardBackVisible && card.hasMindMap());
+        cardBackVisible = true;
+        final boolean allowTapFlip = false;
         if (filterRowView != null) filterRowView.setVisibility(View.VISIBLE);
         stemView.setVisibility(View.GONE);
-        String cardActionHint;
-        if (cardBackVisible && card.hasMindMap()) {
-            cardActionHint = "点分支展开，左右滑动换卡";
-        } else if (!cardBackVisible && card.hasMindMap()) {
-            cardActionHint = "点按翻到导图，左右滑动换卡";
-        } else {
-            cardActionHint = "点按翻面，左右滑动换卡";
-        }
         metaView.setText((currentCardIndex + 1) + "/" + visibleCards.size()
                 + "  ·  " + card.chapter
-                + "  ·  " + (cardBackVisible ? "背面" : "正面")
-                + "  ·  " + cardActionHint);
+                + "  ·  思维导图"
+                + "  ·  轻点节点展开，左右滑动切换知识点");
         feedbackContainer.setPadding(dp(2), dp(8), dp(2), dp(16));
         feedbackContainer.setTranslationX(0f);
         feedbackContainer.setAlpha(1f);
@@ -1714,7 +2119,7 @@ public class MainActivity extends Activity {
                 return handleCardNavigationTouch(v, event, allowTapFlip);
             }
         });
-        renderMemoryCard(feedbackContainer, card, cardBackVisible);
+        renderMemoryCard(feedbackContainer, card, true);
         scrollView.post(new Runnable() {
             @Override
             public void run() {
@@ -1821,7 +2226,7 @@ public class MainActivity extends Activity {
                 exportWrongQuestions();
             }
         });
-        addSettingsActionCardButton(exportCard, "导出当前章节卡片", false, new View.OnClickListener() {
+        addSettingsActionCardButton(exportCard, "导出当前章节导图", false, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 if (currentCardChapter == null) {
@@ -1831,7 +2236,7 @@ public class MainActivity extends Activity {
                 }
             }
         });
-        addSettingsActionCardButton(exportCard, "导出全部章节卡片", true, new View.OnClickListener() {
+        addSettingsActionCardButton(exportCard, "导出全部章节导图", true, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 exportAllChapterCards();
@@ -1891,7 +2296,7 @@ public class MainActivity extends Activity {
         visibleCards.clear();
         visibleCards.addAll(buildMemoryCards(chapter));
         currentCardIndex = 0;
-        cardBackVisible = false;
+        cardBackVisible = true;
         renderQuestion();
     }
 
@@ -1904,7 +2309,7 @@ public class MainActivity extends Activity {
         final int next = currentCardIndex + delta;
         if (next < 0 || next >= visibleCards.size()) {
             settleCardDrag();
-            Toast.makeText(this, delta > 0 ? "已经是最后一张卡片" : "已经是第一张卡片", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, delta > 0 ? "已经是最后一张导图" : "已经是第一张导图", Toast.LENGTH_SHORT).show();
             return;
         }
         final float exitX = delta > 0 ? -Math.max(dp(220), feedbackContainer.getWidth() * 0.55f)
@@ -1917,7 +2322,7 @@ public class MainActivity extends Activity {
                     @Override
                     public void run() {
                         currentCardIndex = next;
-                        cardBackVisible = false;
+                        cardBackVisible = true;
                         renderCardView();
                         feedbackContainer.setTranslationX(-exitX);
                         feedbackContainer.setAlpha(0f);
@@ -1974,13 +2379,12 @@ public class MainActivity extends Activity {
         cardBox.setOrientation(LinearLayout.VERTICAL);
         cardBox.setPadding(dp(20), dp(18), dp(20), dp(18));
         cardBox.setMinimumHeight(dp(520));
-        int surface = backVisible ? CARD_SURFACE_BACK : CARD_SURFACE;
-        int section = backVisible ? CARD_SECTION_BACK : CARD_SECTION;
-        int accent = backVisible ? AMBER : BLUE;
+        int surface = CARD_SURFACE_BACK;
+        int accent = AMBER;
         cardBox.setBackground(roundedStrokeBackground(surface, GLASS_STROKE, 28, 1));
         cardBox.setElevation(dp(4));
         cardBox.setClickable(true);
-        final boolean allowTapFlip = !(backVisible && card.hasMindMap());
+        final boolean allowTapFlip = false;
         cardBox.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
@@ -1988,47 +2392,13 @@ public class MainActivity extends Activity {
             }
         });
 
-        String kickerText;
-        if (card.hasMindMap()) {
-            kickerText = backVisible
-                    ? "背面 · 导图与暗号"
-                    : (card.overviewCard ? "正面 · 章节总览" : "正面 · 知识总览");
-        } else {
-            kickerText = backVisible ? "背面 · 知识拓展" : "正面 · 先回忆";
-        }
-        addCardKicker(cardBox, kickerText, accent);
+        addCardKicker(cardBox, card.overviewCard ? "章节总览 · 思维导图" : "知识点 · 思维导图", accent);
         addCardTitle(cardBox, card.knowledge);
         addCardSubhead(cardBox, card.chapter + "  ·  覆盖 " + card.questionCount + " 题");
         addCardDivider(cardBox);
-
-        if (card.usesRichNotebookCard()) {
-            renderNotebookMemoryCard(cardBox, card, backVisible, section);
-            LinearLayout.LayoutParams richLp = new LinearLayout.LayoutParams(-1, -2);
-            richLp.topMargin = dp(2);
-            richLp.bottomMargin = dp(8);
-            container.addView(cardBox, richLp);
-            return;
-        }
-
-        if (backVisible) {
-            addCardSection(cardBox, "一句话定位", card.layerHint, HIGHLIGHT, true);
-            if (!card.corePoints.isEmpty()) {
-                addCardBullets(cardBox, "底层知识点", card.corePoints, section);
-            } else {
-                addCardSection(cardBox, "底层模型", card.modelSummary, section, false);
-            }
-            addCardBullets(cardBox, "必须原样背 / 会算", card.mustRemember, section);
-            addCardBullets(cardBox, "易错开关", card.traps, section);
-            addCardBullets(cardBox, "逐题覆盖线索", card.questionTips, section);
-            addCardSection(cardBox, "覆盖题号", card.labels, section, false);
-            addCardHint(cardBox, "左右滑动换知识点 · 点按回到正面");
-        } else {
-            addCardSection(cardBox, "本章地图", card.chapterMap, section, false);
-            addCardBullets(cardBox, "先抓题眼", card.eyeLines, section);
-            addCardBullets(cardBox, "考场三问", card.selfChecks, section);
-            addCardSection(cardBox, "覆盖范围", card.typeDistribution + "\n" + card.labels, section, false);
-            addCardHint(cardBox, "点按翻到背面 · 左右滑动换知识点");
-        }
+        addMindMapSection(cardBox, card);
+        addCardHint(cardBox, "上一页 / 下一页切换导图页 · 轻点节点展开分支 · 左右滑动切换知识点");
+        addCardBottomSpacer(cardBox, 56);
 
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.topMargin = dp(2);
@@ -2038,34 +2408,8 @@ public class MainActivity extends Activity {
 
     private void renderNotebookMemoryCard(LinearLayout cardBox, MemoryCard card, boolean backVisible, int sectionColor) {
         String markdown = backVisible ? card.backMarkdown : card.frontMarkdown;
-        if (backVisible && card.hasMindMap()) {
-            addMindMapSection(cardBox, card);
-            addNotebookMarkdownShell(cardBox, markdown, sectionColor, dp(10));
-            TextView backButton = text("返回总览", 13, BLUE, true);
-            backButton.setGravity(Gravity.CENTER);
-            backButton.setPadding(dp(12), dp(7), dp(12), dp(7));
-            backButton.setBackground(roundedBackground(Color.argb(34, Color.red(BLUE), Color.green(BLUE), Color.blue(BLUE)), 999));
-            backButton.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    flipCurrentCard();
-                }
-            });
-            LinearLayout.LayoutParams backLp = new LinearLayout.LayoutParams(-2, -2);
-            backLp.topMargin = dp(10);
-            cardBox.addView(backButton, backLp);
-            addCardHint(cardBox, "点分支展开细节 · 左右滑动换卡");
-            addCardBottomSpacer(cardBox, 88);
-        } else if (backVisible) {
-            addNotebookMarkdownShell(cardBox, markdown, sectionColor, dp(4));
-            addCardHint(cardBox, "点按回到正面 · 左右滑动换知识点");
-        } else if (card.hasMindMap()) {
-            addNotebookMarkdownShell(cardBox, markdown, sectionColor, dp(4));
-            addCardHint(cardBox, "点按翻到导图 · 左右滑动换知识点");
-        } else {
-            addNotebookMarkdownShell(cardBox, markdown, sectionColor, dp(4));
-            addCardHint(cardBox, "点按翻到背面 · 左右滑动换知识点");
-        }
+        addNotebookMarkdownShell(cardBox, markdown, sectionColor, dp(4));
+        addCardHint(cardBox, "左右滑动切换知识点");
     }
 
     private void addNotebookMarkdownShell(LinearLayout parent, String markdown, int sectionColor, int topMargin) {
@@ -2182,162 +2526,121 @@ public class MainActivity extends Activity {
         mapStage.setPadding(dp(14), dp(14), dp(14), dp(14));
         mapStage.setBackground(roundedBackground(CARD_SECTION, 20));
 
-        TextView guide = text("点开任一分支，直接看这一组题围绕什么中心词、高频口径和易错点。", 13, MUTED, false);
+        TextView guide = text("导图模式：先看主干，再用上一页 / 下一页推进到更深分支；轻点节点会展开，并同步下方详细说明。", 13, MUTED, false);
         guide.setLineSpacing(dp(3), 1.0f);
         mapStage.addView(guide, new LinearLayout.LayoutParams(-1, -2));
 
-        LinearLayout hubWrap = new LinearLayout(this);
-        hubWrap.setGravity(Gravity.CENTER_HORIZONTAL);
-        LinearLayout.LayoutParams hubWrapLp = new LinearLayout.LayoutParams(-1, -2);
-        hubWrapLp.topMargin = dp(12);
-        mapStage.addView(hubWrap, hubWrapLp);
+        FrameLayout boardShell = new FrameLayout(this);
+        boardShell.setBackground(roundedStrokeBackground(
+                THEME_LIGHT.equals(themeMode) ? Color.argb(238, 20, 25, 34) : Color.argb(244, 13, 18, 28),
+                Color.argb(THEME_LIGHT.equals(themeMode) ? 112 : 76, 115, 152, 219),
+                22, 1));
+        LinearLayout.LayoutParams boardLp = new LinearLayout.LayoutParams(-1, dp(520));
+        boardLp.topMargin = dp(12);
+        mapStage.addView(boardShell, boardLp);
 
-        final TextView hub = text(card.mindMapTitle, 18, TEXT, true);
-        hub.setGravity(Gravity.CENTER);
-        hub.setPadding(dp(18), dp(18), dp(18), dp(18));
-        hub.setBackground(roundedBackground(Color.argb(255, 214, 221, 255), 18));
-        hub.setMaxWidth(dp(280));
-        hubWrap.addView(hub, new LinearLayout.LayoutParams(-2, -2));
+        final MindMapCanvasView canvasView = new MindMapCanvasView(this,
+                card.mindMapTitle.length() == 0 ? card.knowledge : card.mindMapTitle,
+                card.mindMapNodes);
+        boardShell.addView(canvasView, new FrameLayout.LayoutParams(-1, -1));
 
-        View stem = new View(this);
-        stem.setBackgroundColor(GLASS_STROKE);
-        LinearLayout.LayoutParams stemLp = new LinearLayout.LayoutParams(dp(2), dp(20));
-        stemLp.gravity = Gravity.CENTER_HORIZONTAL;
-        stemLp.topMargin = dp(8);
-        mapStage.addView(stem, stemLp);
+        final TextView boardTag = text("NotebookLM 风格导图", 12, Color.WHITE, true);
+        boardTag.setPadding(dp(10), dp(6), dp(10), dp(6));
+        boardTag.setBackground(roundedBackground(Color.argb(58, 255, 255, 255), 999));
+        FrameLayout.LayoutParams tagLp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
+        tagLp.topMargin = dp(12);
+        tagLp.leftMargin = dp(12);
+        boardShell.addView(boardTag, tagLp);
 
-        final LinearLayout branchColumn = new LinearLayout(this);
-        branchColumn.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams branchLp = new LinearLayout.LayoutParams(-1, -2);
-        branchLp.topMargin = dp(4);
-        mapStage.addView(branchColumn, branchLp);
+        final TextView pageChip = text("第 1 / 1 页", 12, Color.WHITE, true);
+        pageChip.setPadding(dp(10), dp(6), dp(10), dp(6));
+        pageChip.setBackground(roundedBackground(Color.argb(84, 255, 196, 86), 999));
+        FrameLayout.LayoutParams chipLp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
+        chipLp.topMargin = dp(12);
+        chipLp.rightMargin = dp(12);
+        boardShell.addView(pageChip, chipLp);
 
-        final List<LinearLayout> branchHeaders = new ArrayList<>();
-        final List<View> branchBodies = new ArrayList<>();
-        final List<TextView> branchToggles = new ArrayList<>();
-        final List<Integer> branchColors = new ArrayList<>();
-        for (int i = 0; i < card.mindMapNodes.size(); i++) {
-            final MindMapNode node = card.mindMapNodes.get(i);
-            final int accent = mindMapAccentColor(i);
-            final LinearLayout row = new LinearLayout(this);
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            row.setGravity(Gravity.TOP);
-            LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(-1, -2);
-            if (i > 0) rowLp.topMargin = dp(14);
-            branchColumn.addView(row, rowLp);
+        LinearLayout pagerRow = new LinearLayout(this);
+        pagerRow.setOrientation(LinearLayout.HORIZONTAL);
+        pagerRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams pagerLp = new LinearLayout.LayoutParams(-1, -2);
+        pagerLp.topMargin = dp(12);
+        mapStage.addView(pagerRow, pagerLp);
 
-            FrameLayout rail = new FrameLayout(this);
-            LinearLayout.LayoutParams railLp = new LinearLayout.LayoutParams(dp(24), -2);
-            railLp.rightMargin = dp(10);
-            row.addView(rail, railLp);
+        final TextView prevButton = text("上一页", 13, BLUE, true);
+        prevButton.setGravity(Gravity.CENTER);
+        prevButton.setPadding(dp(14), dp(8), dp(14), dp(8));
+        pagerRow.addView(prevButton, new LinearLayout.LayoutParams(-2, -2));
 
-            View dot = new View(this);
-            dot.setBackground(roundedBackground(accent, 999));
-            FrameLayout.LayoutParams dotLp = new FrameLayout.LayoutParams(dp(10), dp(10));
-            dotLp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-            dotLp.topMargin = dp(8);
-            rail.addView(dot, dotLp);
+        final TextView pagerMeta = text("根节点总览", 12, MUTED, true);
+        pagerMeta.setGravity(Gravity.CENTER);
+        pagerMeta.setPadding(dp(12), dp(0), dp(12), dp(0));
+        LinearLayout.LayoutParams pagerMetaLp = new LinearLayout.LayoutParams(0, -2, 1);
+        pagerRow.addView(pagerMeta, pagerMetaLp);
 
-            View line = new View(this);
-            line.setBackgroundColor(Color.argb(108, Color.red(accent), Color.green(accent), Color.blue(accent)));
-            FrameLayout.LayoutParams lineLp = new FrameLayout.LayoutParams(dp(2), i == card.mindMapNodes.size() - 1 ? dp(36) : dp(92));
-            lineLp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-            lineLp.topMargin = dp(14);
-            rail.addView(line, lineLp);
+        final TextView nextButton = text("下一页", 13, AMBER, true);
+        nextButton.setGravity(Gravity.CENTER);
+        nextButton.setPadding(dp(14), dp(8), dp(14), dp(8));
+        pagerRow.addView(nextButton, new LinearLayout.LayoutParams(-2, -2));
 
-            final LinearLayout item = new LinearLayout(this);
-            item.setOrientation(LinearLayout.VERTICAL);
-            row.addView(item, new LinearLayout.LayoutParams(0, -2, 1f));
+        styleMindMapPagerButton(prevButton, BLUE, false);
+        styleMindMapPagerButton(nextButton, AMBER, false);
 
-            final LinearLayout header = new LinearLayout(this);
-            header.setOrientation(LinearLayout.HORIZONTAL);
-            header.setGravity(Gravity.CENTER_VERTICAL);
-            header.setPadding(dp(16), dp(14), dp(16), dp(14));
-            header.setBackground(roundedBackground(Color.argb(255, 243, 247, 255), 18));
-            item.addView(header, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout detailShell = new LinearLayout(this);
+        detailShell.setOrientation(LinearLayout.VERTICAL);
+        detailShell.setPadding(dp(14), dp(12), dp(14), dp(12));
+        detailShell.setBackground(roundedBackground(Color.argb(THEME_LIGHT.equals(themeMode) ? 96 : 74, 255, 255, 255), 18));
+        LinearLayout.LayoutParams detailLp = new LinearLayout.LayoutParams(-1, -2);
+        detailLp.topMargin = dp(12);
+        mapStage.addView(detailShell, detailLp);
 
-            LinearLayout textColumn = new LinearLayout(this);
-            textColumn.setOrientation(LinearLayout.VERTICAL);
-            header.addView(textColumn, new LinearLayout.LayoutParams(0, -2, 1));
+        final TextView detailTitle = text("节点要点", 16, TEXT, true);
+        detailShell.addView(detailTitle, new LinearLayout.LayoutParams(-1, -2));
 
-            TextView nodeTitle = text(node.title, 17, Color.rgb(29, 40, 66), true);
-            nodeTitle.setLineSpacing(dp(3), 1.0f);
-            textColumn.addView(nodeTitle, new LinearLayout.LayoutParams(-1, -2));
+        final TextView detailMeta = text("轻点导图里的任意节点查看详细说明", 12, MUTED, false);
+        LinearLayout.LayoutParams metaLp = new LinearLayout.LayoutParams(-1, -2);
+        metaLp.topMargin = dp(4);
+        detailShell.addView(detailMeta, metaLp);
 
-            if (node.badge.length() > 0) {
-                TextView badge = text(node.badge, 12, Color.rgb(78, 94, 126), true);
-                badge.setPadding(dp(10), dp(5), dp(10), dp(5));
-                badge.setBackground(roundedBackground(Color.argb(48, Color.red(accent), Color.green(accent), Color.blue(accent)), 999));
-                LinearLayout.LayoutParams badgeLp = new LinearLayout.LayoutParams(-2, -2);
-                badgeLp.topMargin = dp(4);
-                textColumn.addView(badge, badgeLp);
+        final LinearLayout detailPoints = new LinearLayout(this);
+        detailPoints.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams pointsLp = new LinearLayout.LayoutParams(-1, -2);
+        pointsLp.topMargin = dp(10);
+        detailShell.addView(detailPoints, pointsLp);
+
+        prevButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                canvasView.goToPreviousPage();
             }
-
-            final TextView toggle = text(i == 0 ? "收起" : "展开", 12, BLUE, true);
-            toggle.setGravity(Gravity.CENTER);
-            toggle.setPadding(dp(10), dp(6), dp(10), dp(6));
-            header.addView(toggle, new LinearLayout.LayoutParams(-2, -2));
-
-            final LinearLayout body = new LinearLayout(this);
-            body.setOrientation(LinearLayout.VERTICAL);
-            body.setPadding(dp(14), dp(12), dp(14), dp(12));
-            body.setBackground(roundedBackground(Color.argb(180, 255, 255, 255), 16));
-            body.setVisibility(i == 0 ? View.VISIBLE : View.GONE);
-            LinearLayout.LayoutParams bodyLp = new LinearLayout.LayoutParams(-1, -2);
-            bodyLp.topMargin = dp(8);
-            item.addView(body, bodyLp);
-
-            if (node.summary.length() > 0) {
-                TextView summary = text(node.summary, 14, TEXT, true);
-                summary.setLineSpacing(dp(3), 1.0f);
-                body.addView(summary, new LinearLayout.LayoutParams(-1, -2));
+        });
+        nextButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                canvasView.goToNextPage();
             }
-            for (String point : node.points) {
-                TextView bullet = text("• " + point, 14, TEXT, false);
-                bullet.setLineSpacing(dp(3), 1.0f);
-                LinearLayout.LayoutParams bulletLp = new LinearLayout.LayoutParams(-1, -2);
-                bulletLp.topMargin = dp(6);
-                body.addView(bullet, bulletLp);
-            }
+        });
 
-            branchHeaders.add(header);
-            branchBodies.add(body);
-            branchToggles.add(toggle);
-            branchColors.add(accent);
-            header.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    for (int j = 0; j < branchBodies.size(); j++) {
-                        View candidate = branchBodies.get(j);
-                        LinearLayout candidateHeader = branchHeaders.get(j);
-                        TextView candidateToggle = branchToggles.get(j);
-                        int candidateAccent = branchColors.get(j);
-                        boolean expand = candidate == body && candidate.getVisibility() != View.VISIBLE;
-                        candidate.setVisibility(expand ? View.VISIBLE : View.GONE);
-                        applyMindMapBranchState(candidateHeader, candidateToggle, candidateAccent, expand);
-                    }
-                }
-            });
-        }
+        canvasView.setSelectionListener(new MindMapSelectionListener() {
+            @Override
+            public void onNodeSelected(MindMapNode node, int accentColor) {
+                populateMindMapDetail(detailTitle, detailMeta, detailPoints, node, accentColor);
+            }
+        });
+        canvasView.setPageStateListener(new MindMapPageStateListener() {
+            @Override
+            public void onPageStateChanged(int page, int totalPages, boolean canGoPrevious, boolean canGoNext) {
+                pageChip.setText("第 " + page + " / " + totalPages + " 页");
+                pagerMeta.setText(page == 1 ? "根节点总览" : "更深层分支");
+                styleMindMapPagerButton(prevButton, BLUE, canGoPrevious);
+                styleMindMapPagerButton(nextButton, AMBER, canGoNext);
+            }
+        });
+        canvasView.selectInitialNode();
 
         LinearLayout.LayoutParams stageLp = new LinearLayout.LayoutParams(-1, -2);
         stageLp.topMargin = dp(8);
         parent.addView(mapStage, stageLp);
-        for (int i = 0; i < branchHeaders.size(); i++) {
-            applyMindMapBranchState(branchHeaders.get(i), branchToggles.get(i), branchColors.get(i), i == 0);
-        }
-    }
-
-    private void applyMindMapBranchState(LinearLayout header, TextView toggle, int accentColor, boolean expanded) {
-        header.setAlpha(expanded ? 1f : 0.96f);
-        header.setBackground(roundedBackground(
-                Color.argb(expanded ? 88 : 42, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor)),
-                18));
-        toggle.setText(expanded ? "收起" : "展开");
-        toggle.setTextColor(expanded ? TEXT : BLUE);
-        toggle.setBackground(roundedBackground(
-                Color.argb(expanded ? 92 : 44, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor)),
-                999));
     }
 
     private int mindMapAccentColor(int index) {
@@ -2351,13 +2654,64 @@ public class MainActivity extends Activity {
         return palette[Math.abs(index) % palette.length];
     }
 
-    private void syncMindMapConnectors(FrameLayout mapCanvas, View hub, List<View> headers, MindMapConnectorView connectorView) {
-        RectF hubRect = new RectF(hub.getLeft(), hub.getTop(), hub.getRight(), hub.getBottom());
-        List<RectF> targets = new ArrayList<>();
-        for (View header : headers) {
-            targets.add(new RectF(header.getLeft(), header.getTop(), header.getRight(), header.getBottom()));
+    private void populateMindMapDetail(TextView titleView, TextView metaView, LinearLayout pointsContainer, MindMapNode node, int accentColor) {
+        titleView.setText(node.title);
+        StringBuilder meta = new StringBuilder();
+        if (node.badge.length() > 0) {
+            meta.append(node.badge);
         }
-        connectorView.setGraph(hubRect, targets);
+        if (!node.children.isEmpty()) {
+            if (meta.length() > 0) meta.append("  ·  ");
+            meta.append(node.children.size()).append(" 个下级分支");
+        }
+        if (meta.length() == 0) {
+            meta.append("当前选中节点");
+        }
+        metaView.setText(meta.toString());
+        metaView.setTextColor(Color.argb(228, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor)));
+
+        pointsContainer.removeAllViews();
+        if (node.summary.length() > 0) {
+            TextView summary = text(node.summary, 14, TEXT, true);
+            summary.setLineSpacing(dp(3), 1.0f);
+            pointsContainer.addView(summary, new LinearLayout.LayoutParams(-1, -2));
+        }
+
+        for (String point : node.points) {
+            TextView bullet = text("• " + point, 14, TEXT, false);
+            bullet.setLineSpacing(dp(3), 1.0f);
+            LinearLayout.LayoutParams bulletLp = new LinearLayout.LayoutParams(-1, -2);
+            bulletLp.topMargin = dp(8);
+            pointsContainer.addView(bullet, bulletLp);
+        }
+
+        if (!node.children.isEmpty()) {
+            TextView childTitle = text("下一级分支", 13, accentColor, true);
+            LinearLayout.LayoutParams childTitleLp = new LinearLayout.LayoutParams(-1, -2);
+            childTitleLp.topMargin = dp(12);
+            pointsContainer.addView(childTitle, childTitleLp);
+            for (MindMapNode child : node.children) {
+                TextView childLine = text("· " + child.title, 13, MUTED, false);
+                LinearLayout.LayoutParams childLp = new LinearLayout.LayoutParams(-1, -2);
+                childLp.topMargin = dp(6);
+                pointsContainer.addView(childLine, childLp);
+            }
+        }
+    }
+
+    private void styleMindMapPagerButton(TextView button, int color, boolean enabled) {
+        button.setEnabled(enabled);
+        button.setAlpha(enabled ? 1f : 0.42f);
+        button.setTextColor(color);
+        button.setBackground(roundedStrokeBackground(
+                enabled
+                        ? Color.argb(THEME_LIGHT.equals(themeMode) ? 236 : 88, 255, 255, 255)
+                        : Color.argb(THEME_LIGHT.equals(themeMode) ? 188 : 58, 255, 255, 255),
+                enabled
+                        ? Color.argb(THEME_LIGHT.equals(themeMode) ? 124 : 84, Color.red(color), Color.green(color), Color.blue(color))
+                        : Color.argb(THEME_LIGHT.equals(themeMode) ? 74 : 42, 168, 178, 198),
+                999,
+                1));
     }
 
     private List<String> defaultCardBullets() {
@@ -3313,12 +3667,12 @@ public class MainActivity extends Activity {
     private void showChapterCardsDialog() {
         final List<String> chapters = chapterList();
         final List<String> items = new ArrayList<>();
-        items.add("全部章节记忆卡片");
+        items.add("全部章节思维导图");
         for (int i = 0; i < chapters.size(); i++) {
             items.add(chapters.get(i));
         }
         int checked = currentCardChapter == null ? 0 : Math.max(0, items.indexOf(currentCardChapter));
-        showChoiceSheet("打开章节记忆卡片", items, checked, new ChoiceHandler() {
+        showChoiceSheet("打开章节思维导图", items, checked, new ChoiceHandler() {
             @Override
             public void onChosen(int which, String item) {
                 if (which == 0) {
@@ -3348,7 +3702,7 @@ public class MainActivity extends Activity {
 
     private void shareCurrentQuestion() {
         if (cardMode) {
-            Toast.makeText(this, "当前是卡片阅读模式，请回到题目后再分享本题", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "当前是思维导图模式，请回到题目后再分享本题", Toast.LENGTH_SHORT).show();
             return;
         }
         if (visibleQuestions.isEmpty()) {
@@ -3460,17 +3814,17 @@ public class MainActivity extends Activity {
     private void exportChapterCard(String chapter) {
         try {
             String md = buildChapterMemoryCard(chapter);
-            String fileName = safeExportFileName(chapter.replace(". ", "_") + "_记忆卡片.md");
+            String fileName = safeExportFileName(chapter.replace(". ", "_") + "_思维导图.md");
             shareMarkdownFile(
                     fileName,
-                    chapter + " 记忆卡片",
-                    "分享章节记忆卡片",
+                    chapter + " 思维导图",
+                    "分享章节思维导图",
                     md,
-                    chapter + " 记忆卡片 Markdown 文件见附件。",
-                    "已生成章节记忆卡片，并打开分享"
+                    chapter + " 思维导图 Markdown 文件见附件。",
+                    "已生成章节思维导图，并打开分享"
             );
         } catch (Exception e) {
-            Toast.makeText(this, "导出章节卡片失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "导出章节导图失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
@@ -3478,15 +3832,15 @@ public class MainActivity extends Activity {
         try {
             String md = buildAllChapterCardsMarkdown();
             shareMarkdownFile(
-                    "计算机网络_章节记忆卡片全集.md",
-                    "计算机网络章节记忆卡片全集",
-                    "分享全部章节记忆卡片",
+                    "计算机网络_章节思维导图全集.md",
+                    "计算机网络章节思维导图全集",
+                    "分享全部章节思维导图",
                     md,
-                    "计算机网络章节记忆卡片全集 Markdown 文件见附件。",
-                    "已生成全部章节记忆卡片，并打开分享"
+                    "计算机网络章节思维导图全集 Markdown 文件见附件。",
+                    "已生成全部章节思维导图，并打开分享"
             );
         } catch (Exception e) {
-            Toast.makeText(this, "导出全部卡片失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "导出全部导图失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
@@ -3494,11 +3848,11 @@ public class MainActivity extends Activity {
         if (!allMemoryCards.isEmpty()) {
             List<String> labels = allCardLabels();
             StringBuilder sb = new StringBuilder();
-            sb.append("# 计算机网络复习宝典：章节记忆卡片全集\n\n");
+            sb.append("# 计算机网络复习宝典：章节思维导图全集\n\n");
             sb.append("- 覆盖题目：").append(labels.size()).append(" 题\n");
             sb.append("- 覆盖章节：").append(cardChapterList().size()).append(" 章\n");
-            sb.append("- 覆盖知识点卡片：").append(allMemoryCards.size()).append(" 张\n");
-            sb.append("- 生成方式：使用 App 内置 `chapter_cards.json`，每张卡都包含底层知识点、必背标准词/数字、易错开关和逐题覆盖线索。\n\n");
+            sb.append("- 覆盖知识点导图：").append(allMemoryCards.size()).append(" 组\n");
+            sb.append("- 生成方式：使用 App 内置 `chapter_cards.json`，每组导图都包含底层知识点、必背标准词/数字、易错开关和逐题覆盖线索。\n\n");
             sb.append("## 覆盖总览\n\n");
             for (String chapter : cardChapterList()) {
                 List<MemoryCard> cards = memoryCardsInChapter(chapter);
@@ -3509,7 +3863,7 @@ public class MainActivity extends Activity {
                     }
                 }
                 sb.append("- ").append(chapter).append("：").append(questionCount)
-                        .append(" 题，").append(cards.size()).append(" 张卡片\n");
+                        .append(" 题，").append(cards.size()).append(" 组导图\n");
             }
             sb.append("\n");
             for (String chapter : cardChapterList()) {
@@ -3518,7 +3872,7 @@ public class MainActivity extends Activity {
             return sb.toString();
         }
         StringBuilder sb = new StringBuilder();
-        sb.append("# 计算机网络考试练习：章节记忆卡片全集\n\n");
+        sb.append("# 计算机网络考试练习：章节思维导图全集\n\n");
         sb.append("- 覆盖题目：").append(allQuestions.size()).append(" 题\n");
         sb.append("- 覆盖章节：").append(chapterList().size()).append(" 章\n");
         sb.append("- 覆盖知识点：").append(knowledgePairCount(allQuestions)).append(" 个\n");
@@ -3540,9 +3894,7 @@ public class MainActivity extends Activity {
             List<MemoryCard> cards = new ArrayList<>();
             for (MemoryCard card : allMemoryCards) {
                 if (chapter == null) {
-                    if (!card.overviewCard) {
-                        cards.add(card);
-                    }
+                    cards.add(card);
                 } else if (chapter.equals(card.chapter)) {
                     cards.add(card);
                 }
@@ -3607,13 +3959,13 @@ public class MainActivity extends Activity {
 
     private String buildMemoryCardMarkdown(MemoryCard card, int index) {
         StringBuilder sb = new StringBuilder();
-        sb.append("### 卡片 ").append(index).append("：").append(card.knowledge).append("\n\n");
+        sb.append("### 导图 ").append(index).append("：").append(card.knowledge).append("\n\n");
         sb.append("- 覆盖题目：").append(card.questionCount).append(" 题\n");
         sb.append("- 题型分布：").append(card.typeDistribution).append("\n");
         sb.append("- 题号：").append(card.labels).append("\n\n");
-        sb.append("**正面：看到什么题眼要想到它？**\n\n");
+        sb.append("**导图重点：看到什么题眼要想到它？**\n\n");
         appendLimitedBullets(sb, card.eyeLines);
-        sb.append("\n**背面：小白必须掌握的底层知识点**\n\n");
+        sb.append("\n**底层知识点：小白必须掌握什么？**\n\n");
         sb.append("- 层次定位：").append(card.layerHint).append("\n");
         appendLimitedBullets(sb, card.corePoints);
         sb.append("\n**必须原样背 / 会算**\n\n");
@@ -3634,7 +3986,7 @@ public class MainActivity extends Activity {
                 questionCount += card.questionCount;
             }
         }
-        sb.append("# ").append(chapter).append(" 记忆卡片\n\n");
+        sb.append("# ").append(chapter).append(" 思维导图\n\n");
         sb.append("- 覆盖题目：").append(questionCount).append(" 题\n");
         sb.append("- 覆盖知识点：").append(cards.size()).append(" 个\n");
         if (!cards.isEmpty()) {
@@ -3714,7 +4066,7 @@ public class MainActivity extends Activity {
 
     private String buildMemoryCardFront(String chapter, String knowledge, List<Question> qs, String labels) {
         StringBuilder sb = new StringBuilder();
-        sb.append("# 正面\n\n");
+        sb.append("# 导图导读\n\n");
         sb.append("## ").append(knowledge).append("\n\n");
         sb.append("- **章节：** ").append(chapter).append("\n");
         sb.append("- **覆盖：** ").append(qs.size()).append(" 题\n");
@@ -3725,13 +4077,13 @@ public class MainActivity extends Activity {
         sb.append("- 它属于 OSI/TCP-IP 哪一层？\n");
         sb.append("- 它解决的是地址、转发、可靠性、介质，还是具体应用？\n");
         sb.append("- 题干有没有把相邻概念偷换？\n\n");
-        sb.append("点卡片看背面。左右滑动切换卡片。\n");
+        sb.append("进入导图模式后，先看主干，再沿分支复述关键知识点。\n");
         return sb.toString();
     }
 
     private String buildMemoryCardBack(String chapter, String knowledge, List<Question> qs, String labels) {
         StringBuilder sb = new StringBuilder();
-        sb.append("# 背面\n\n");
+        sb.append("# 导图展开\n\n");
         sb.append("## ").append(knowledge).append("\n\n");
         sb.append("- **层次定位：** ").append(knowledgeLayerHint(chapter, knowledge)).append("\n\n");
         String summary = groupKnowledgeSummary(qs);
@@ -3747,7 +4099,7 @@ public class MainActivity extends Activity {
         appendLimitedBullets(sb, traps);
         sb.append("\n### 覆盖题号\n\n");
         sb.append("- ").append(labels).append("\n\n");
-        sb.append("复习动作：遮住背面，只看正面题眼，能说出层次、机制和易错点才算过。\n");
+        sb.append("复习动作：只看题眼和导图主干，能说出层次、机制和易错点才算过。\n");
         return sb.toString();
     }
 
@@ -3761,11 +4113,11 @@ public class MainActivity extends Activity {
         List<Question> chapterQuestions = questionsInChapter(chapter);
         Map<String, List<Question>> groups = groupByKnowledge(chapterQuestions);
         StringBuilder sb = new StringBuilder();
-        sb.append("# ").append(chapter).append(" 记忆卡片\n\n");
+        sb.append("# ").append(chapter).append(" 思维导图\n\n");
         sb.append("- 覆盖题目：").append(chapterQuestions.size()).append(" 题\n");
         sb.append("- 覆盖知识点：").append(groups.size()).append(" 个\n");
         sb.append("- 题型分布：").append(typeDistribution(chapterQuestions)).append("\n");
-        sb.append("- 用法：先遮住“背面”默答，再看答案；最后用题号清单回到 App 刷对应题。\n\n");
+        sb.append("- 用法：先看导图主干，再顺着分支复述知识点；最后用题号清单回到 App 刷对应题。\n\n");
 
         sb.append("## 本章总地图\n\n");
         sb.append(chapterLayerHint(chapter)).append("\n\n");
@@ -3777,15 +4129,15 @@ public class MainActivity extends Activity {
         }
         sb.append("\n");
 
-        sb.append("## 记忆卡片\n\n");
+        sb.append("## 思维导图摘要\n\n");
         groupIndex = 1;
         for (Map.Entry<String, List<Question>> entry : groups.entrySet()) {
             String knowledge = entry.getKey();
             List<Question> qs = entry.getValue();
-            sb.append("### 卡片 ").append(groupIndex++).append("：").append(knowledge).append("\n\n");
-            sb.append("**正面：看到什么题眼要想到它？**\n\n");
+            sb.append("### 导图 ").append(groupIndex++).append("：").append(knowledge).append("\n\n");
+            sb.append("**导图重点：看到什么题眼要想到它？**\n\n");
             appendLimitedBullets(sb, collectLineValues(qs, "题眼：", 10));
-            sb.append("\n**背面：小白必须掌握的底层模型**\n\n");
+            sb.append("\n**底层模型：小白必须掌握什么？**\n\n");
             sb.append("- 层次定位：").append(knowledgeLayerHint(chapter, knowledge)).append("\n");
             String summary = groupKnowledgeSummary(qs);
             if (summary.length() > 0) {
@@ -5928,9 +6280,15 @@ public class MainActivity extends Activity {
         }
 
         boolean usesRichNotebookCard() {
-            return (frontMarkdown != null && frontMarkdown.trim().length() > 0)
-                    || (backMarkdown != null && backMarkdown.trim().length() > 0)
-                    || hasMindMap();
+            return hasFrontMarkdown() || hasBackMarkdown();
+        }
+
+        boolean hasFrontMarkdown() {
+            return frontMarkdown != null && frontMarkdown.trim().length() > 0;
+        }
+
+        boolean hasBackMarkdown() {
+            return backMarkdown != null && backMarkdown.trim().length() > 0;
         }
 
         boolean hasMindMap() {
@@ -5943,47 +6301,466 @@ public class MainActivity extends Activity {
         final String summary;
         final String badge;
         final List<String> points;
+        final List<MindMapNode> children;
 
-        MindMapNode(String title, String summary, String badge, List<String> points) {
+        MindMapNode(String title, String summary, String badge, List<String> points, List<MindMapNode> children) {
             this.title = title == null ? "" : title;
             this.summary = summary == null ? "" : summary;
             this.badge = badge == null ? "" : badge;
             this.points = points == null ? new ArrayList<String>() : new ArrayList<>(points);
+            this.children = children == null ? new ArrayList<MindMapNode>() : new ArrayList<>(children);
         }
     }
 
-    private static class MindMapConnectorView extends View {
-        private final Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private RectF hubRect = null;
-        private List<RectF> targetRects = new ArrayList<>();
+    private static class MindMapDraftNode {
+        final String title;
+        String badge = "";
+        final StringBuilder summary = new StringBuilder();
+        final List<String> points = new ArrayList<>();
+        final List<MindMapDraftNode> children = new ArrayList<>();
 
-        MindMapConnectorView(Context context, int color) {
+        MindMapDraftNode(String title) {
+            this.title = title == null ? "" : title;
+        }
+    }
+
+    private interface MindMapSelectionListener {
+        void onNodeSelected(MindMapNode node, int accentColor);
+    }
+
+    private interface MindMapPageStateListener {
+        void onPageStateChanged(int page, int totalPages, boolean canGoPrevious, boolean canGoNext);
+    }
+
+    private class MindMapCanvasView extends View {
+        private final MindMapNode rootNode;
+        private final Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint togglePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final TextPaint titlePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+        private final TextPaint badgePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+        private final List<RenderNode> renderNodes = new ArrayList<>();
+        private final Map<String, RenderNode> renderNodeMap = new LinkedHashMap<>();
+        private final Set<String> expandedKeys = new LinkedHashSet<>();
+        private MindMapSelectionListener selectionListener;
+        private MindMapPageStateListener pageStateListener;
+        private String selectedKey = "root";
+        private boolean layoutDirty = true;
+        private int currentPage = 0;
+        private int totalPages = 1;
+        private int contentWidth = 0;
+        private float pageOffset = 0f;
+        private ValueAnimator pageAnimator;
+
+        MindMapCanvasView(Context context, String rootTitle, List<MindMapNode> nodes) {
             super(context);
+            String safeTitle = cleanMindMapText(rootTitle);
+            List<String> rootPoints = new ArrayList<>();
+            if (nodes != null) {
+                for (MindMapNode node : nodes) {
+                    if (node != null && node.title.trim().length() > 0) {
+                        rootPoints.add(node.title);
+                    }
+                }
+            }
+            this.rootNode = new MindMapNode(
+                    safeTitle.length() == 0 ? "知识导图" : safeTitle,
+                    safeTitle,
+                    "",
+                    rootPoints,
+                    nodes == null ? new ArrayList<MindMapNode>() : nodes);
+            expandedKeys.add("root");
+            for (int i = 0; i < this.rootNode.children.size(); i++) {
+                expandedKeys.add("root/" + i);
+            }
             linePaint.setStyle(Paint.Style.STROKE);
-            linePaint.setStrokeWidth(4f);
-            linePaint.setColor(color);
+            linePaint.setStrokeWidth(dp(2));
+            linePaint.setStrokeCap(Paint.Cap.ROUND);
+            linePaint.setStrokeJoin(Paint.Join.ROUND);
+            strokePaint.setStyle(Paint.Style.STROKE);
+            strokePaint.setStrokeWidth(toPx(1.4f));
+            fillPaint.setStyle(Paint.Style.FILL);
+            togglePaint.setStyle(Paint.Style.STROKE);
+            togglePaint.setStrokeWidth(toPx(1.6f));
+            togglePaint.setStrokeCap(Paint.Cap.ROUND);
+            titlePaint.setColor(Color.WHITE);
+            titlePaint.setTextSize(dp(14));
+            titlePaint.setFakeBoldText(true);
+            badgePaint.setTextSize(dp(10));
+            badgePaint.setFakeBoldText(true);
+            setClickable(true);
         }
 
-        void setGraph(RectF hubRect, List<RectF> targetRects) {
-            this.hubRect = hubRect;
-            this.targetRects = targetRects == null ? new ArrayList<RectF>() : targetRects;
-            invalidate();
+        void setSelectionListener(MindMapSelectionListener listener) {
+            this.selectionListener = listener;
+        }
+
+        void setPageStateListener(MindMapPageStateListener listener) {
+            this.pageStateListener = listener;
+            notifyPageState();
+        }
+
+        void selectInitialNode() {
+            post(new Runnable() {
+                @Override
+                public void run() {
+                    ensureLayout();
+                    selectNodeByKey("root", false);
+                }
+            });
+        }
+
+        void goToPreviousPage() {
+            goToPage(currentPage - 1, true);
+        }
+
+        void goToNextPage() {
+            goToPage(currentPage + 1, true);
+        }
+
+        @Override
+        public boolean performClick() {
+            super.performClick();
+            return true;
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent event) {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    getParent().requestDisallowInterceptTouchEvent(true);
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    getParent().requestDisallowInterceptTouchEvent(false);
+                    RenderNode hit = findNodeAt(event.getX(), event.getY());
+                    if (hit != null) {
+                        performClick();
+                        selectedKey = hit.key;
+                        if (hit.expandable && !"root".equals(hit.key)) {
+                            if (expandedKeys.contains(hit.key)) {
+                                expandedKeys.remove(hit.key);
+                            } else {
+                                expandedKeys.add(hit.key);
+                            }
+                            layoutDirty = true;
+                            ensureLayout();
+                        }
+                        focusPageForKey(hit.key, true);
+                        notifySelection();
+                        invalidate();
+                        return true;
+                    }
+                    performClick();
+                    return true;
+                case MotionEvent.ACTION_CANCEL:
+                    getParent().requestDisallowInterceptTouchEvent(false);
+                    return true;
+                default:
+                    return super.onTouchEvent(event);
+            }
+        }
+
+        @Override
+        protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+            super.onSizeChanged(w, h, oldw, oldh);
+            layoutDirty = true;
+            ensureLayout();
         }
 
         @Override
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
-            if (hubRect == null || targetRects.isEmpty()) return;
-            float startX = hubRect.right;
-            float startY = hubRect.centerY();
-            for (RectF rect : targetRects) {
-                float endX = rect.left;
-                float endY = rect.centerY();
-                Path path = new Path();
-                path.moveTo(startX, startY);
-                float dx = Math.max(40f, (endX - startX) * 0.45f);
-                path.cubicTo(startX + dx, startY, endX - dx, endY, endX, endY);
-                canvas.drawPath(path, linePaint);
+            ensureLayout();
+            canvas.save();
+            canvas.translate(-pageOffset, 0f);
+
+            for (RenderNode node : renderNodes) {
+                if (node.parentKey == null) continue;
+                RenderNode parent = renderNodeMap.get(node.parentKey);
+                if (parent == null) continue;
+                drawConnector(canvas, parent, node);
+            }
+
+            for (RenderNode node : renderNodes) {
+                drawNode(canvas, node);
+            }
+            canvas.restore();
+        }
+
+        private void ensureLayout() {
+            if (!layoutDirty || getWidth() <= 0 || getHeight() <= 0) {
+                if (!layoutDirty) {
+                    notifyPageState();
+                }
+                return;
+            }
+            renderNodes.clear();
+            renderNodeMap.clear();
+            float padding = dp(18);
+            float totalHeight = measureSubtree(rootNode, "root", 0);
+            contentWidth = (int) Math.ceil(layoutNode(rootNode, "root", 0, padding, padding, totalHeight, BLUE, null));
+            totalPages = Math.max(1, (int) Math.ceil((contentWidth + padding) / Math.max(1f, getWidth())));
+            currentPage = Math.max(0, Math.min(currentPage, totalPages - 1));
+            if (pageAnimator == null || !pageAnimator.isRunning()) {
+                pageOffset = currentPage * getWidth();
+            }
+            layoutDirty = false;
+            notifyPageState();
+            invalidate();
+        }
+
+        private float measureSubtree(MindMapNode node, String key, int depth) {
+            float nodeHeight = measureNodeHeight(node, depth == 0);
+            if (!isExpanded(key) || node.children.isEmpty()) {
+                return nodeHeight;
+            }
+            float total = 0f;
+            for (int i = 0; i < node.children.size(); i++) {
+                if (i > 0) total += dp(22);
+                total += measureSubtree(node.children.get(i), key + "/" + i, depth + 1);
+            }
+            return Math.max(nodeHeight, total);
+        }
+
+        private float layoutNode(MindMapNode node, String key, int depth, float left, float top, float subtreeHeight, int accentColor, String parentKey) {
+            float width = depth == 0 ? dp(196) : dp(176);
+            float nodeHeight = measureNodeHeight(node, depth == 0);
+            float nodeTop = top + (subtreeHeight - nodeHeight) / 2f;
+            RectF rect = new RectF(left, nodeTop, left + width, nodeTop + nodeHeight);
+            RenderNode renderNode = new RenderNode(node, key, rect, accentColor, parentKey, depth, !node.children.isEmpty());
+            renderNodes.add(renderNode);
+            renderNodeMap.put(key, renderNode);
+
+            float maxRight = rect.right;
+            if (!isExpanded(key) || node.children.isEmpty()) {
+                return maxRight;
+            }
+
+            float childrenTotalHeight = 0f;
+            for (int i = 0; i < node.children.size(); i++) {
+                if (i > 0) childrenTotalHeight += dp(22);
+                childrenTotalHeight += measureSubtree(node.children.get(i), key + "/" + i, depth + 1);
+            }
+            float childTop = top + (subtreeHeight - childrenTotalHeight) / 2f;
+            for (int i = 0; i < node.children.size(); i++) {
+                MindMapNode child = node.children.get(i);
+                float childHeight = measureSubtree(child, key + "/" + i, depth + 1);
+                int childAccent = depth == 0 ? mindMapAccentColor(i) : accentColor;
+                maxRight = Math.max(maxRight, layoutNode(
+                        child,
+                        key + "/" + i,
+                        depth + 1,
+                        rect.right + dp(56),
+                        childTop,
+                        childHeight,
+                        childAccent,
+                        key));
+                childTop += childHeight + dp(22);
+            }
+            return maxRight;
+        }
+
+        private float measureNodeHeight(MindMapNode node, boolean root) {
+            int width = root ? dp(196) : dp(176);
+            int textWidth = width - dp(26);
+            StaticLayout layout = StaticLayout.Builder
+                    .obtain(node.title, 0, node.title.length(), titlePaint, textWidth)
+                    .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                    .setIncludePad(false)
+                    .build();
+            int base = root ? dp(84) : dp(72);
+            int extra = node.badge.length() > 0 ? dp(22) : 0;
+            return Math.max(base, layout.getHeight() + extra + dp(26));
+        }
+
+        private void drawConnector(Canvas canvas, RenderNode parent, RenderNode child) {
+            int lineColor = mixColors(parent.accentColor, child.accentColor, 0.5f);
+            linePaint.setColor(Color.argb(THEME_LIGHT.equals(themeMode) ? 176 : 202,
+                    Color.red(lineColor), Color.green(lineColor), Color.blue(lineColor)));
+            float startX = parent.rect.right;
+            float startY = parent.rect.centerY();
+            float endX = child.rect.left;
+            float endY = child.rect.centerY();
+            float control = Math.max(dp(32), (endX - startX) * 0.42f);
+            Path path = new Path();
+            path.moveTo(startX, startY);
+            path.cubicTo(startX + control, startY, endX - control, endY, endX, endY);
+            canvas.drawPath(path, linePaint);
+        }
+
+        private void drawNode(Canvas canvas, RenderNode node) {
+            boolean selected = node.key.equals(selectedKey);
+            int fill = node.depth == 0
+                    ? mixColors(THEME_LIGHT.equals(themeMode) ? Color.WHITE : Color.rgb(23, 30, 43), node.accentColor, THEME_LIGHT.equals(themeMode) ? 0.18f : 0.28f)
+                    : mixColors(THEME_LIGHT.equals(themeMode) ? Color.WHITE : Color.rgb(28, 34, 48), node.accentColor, THEME_LIGHT.equals(themeMode) ? 0.10f : 0.18f);
+            int stroke = selected
+                    ? node.accentColor
+                    : Color.argb(THEME_LIGHT.equals(themeMode) ? 102 : 78, 210, 220, 242);
+            fillPaint.setColor(fill);
+            strokePaint.setColor(stroke);
+            strokePaint.setStrokeWidth(selected ? dp(2) : toPx(1.3f));
+            canvas.drawRoundRect(node.rect, dp(22), dp(22), fillPaint);
+            canvas.drawRoundRect(node.rect, dp(22), dp(22), strokePaint);
+
+            RectF contentRect = new RectF(
+                    node.rect.left + dp(13),
+                    node.rect.top + dp(12),
+                    node.rect.right - dp(13),
+                    node.rect.bottom - dp(12));
+
+            float badgeBottom = contentRect.top;
+            if (node.node.badge.length() > 0) {
+                String badge = node.node.badge;
+                float badgeWidth = badgePaint.measureText(badge) + dp(16);
+                float badgeHeight = dp(22);
+                RectF badgeRect = new RectF(contentRect.left, contentRect.top, contentRect.left + badgeWidth, contentRect.top + badgeHeight);
+                Paint badgeFill = new Paint(Paint.ANTI_ALIAS_FLAG);
+                badgeFill.setColor(Color.argb(THEME_LIGHT.equals(themeMode) ? 226 : 196,
+                        Color.red(node.accentColor), Color.green(node.accentColor), Color.blue(node.accentColor)));
+                canvas.drawRoundRect(badgeRect, dp(999), dp(999), badgeFill);
+                badgePaint.setColor(Color.WHITE);
+                canvas.drawText(badge, badgeRect.left + dp(8), badgeRect.top + toPx(14.5f), badgePaint);
+                badgeBottom = badgeRect.bottom + dp(8);
+            }
+
+            titlePaint.setColor(node.depth == 0
+                    ? (THEME_LIGHT.equals(themeMode) ? Color.rgb(28, 36, 52) : Color.WHITE)
+                    : (THEME_LIGHT.equals(themeMode) ? Color.rgb(38, 47, 66) : Color.argb(246, 255, 255, 255)));
+            int availableWidth = (int) (contentRect.width());
+            int titleTop = (int) Math.max(contentRect.top, badgeBottom);
+            StaticLayout titleLayout = StaticLayout.Builder
+                    .obtain(node.node.title, 0, node.node.title.length(), titlePaint, availableWidth)
+                    .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                    .setIncludePad(false)
+                    .setMaxLines(node.depth == 0 ? 4 : 3)
+                    .build();
+            canvas.save();
+            canvas.translate(contentRect.left, titleTop);
+            titleLayout.draw(canvas);
+            canvas.restore();
+
+            if (node.expandable && !"root".equals(node.key)) {
+                float cx = node.rect.right - dp(18);
+                float cy = node.rect.bottom - dp(18);
+                Paint bubble = new Paint(Paint.ANTI_ALIAS_FLAG);
+                bubble.setColor(Color.argb(THEME_LIGHT.equals(themeMode) ? 230 : 178,
+                        Color.red(node.accentColor), Color.green(node.accentColor), Color.blue(node.accentColor)));
+                canvas.drawCircle(cx, cy, dp(11), bubble);
+                togglePaint.setColor(Color.WHITE);
+                canvas.drawLine(cx - dp(4), cy, cx + dp(4), cy, togglePaint);
+                if (!expandedKeys.contains(node.key)) {
+                    canvas.drawLine(cx, cy - dp(4), cx, cy + dp(4), togglePaint);
+                }
+            }
+        }
+
+        private RenderNode findNodeAt(float x, float y) {
+            float worldX = x + pageOffset;
+            for (int i = renderNodes.size() - 1; i >= 0; i--) {
+                RenderNode node = renderNodes.get(i);
+                if (node.rect.contains(worldX, y)) {
+                    return node;
+                }
+            }
+            return null;
+        }
+
+        private boolean isExpanded(String key) {
+            return "root".equals(key) || expandedKeys.contains(key);
+        }
+
+        private void selectNodeByKey(String key, boolean animatePage) {
+            selectedKey = key;
+            ensureLayout();
+            focusPageForKey(key, animatePage);
+            notifySelection();
+            invalidate();
+        }
+
+        private void focusPageForKey(String key, boolean animate) {
+            RenderNode node = renderNodeMap.get(key);
+            if (node == null || getWidth() <= 0) return;
+            int targetPage = Math.max(0, Math.min(totalPages - 1, (int) (node.rect.centerX() / getWidth())));
+            goToPage(targetPage, animate);
+        }
+
+        private void goToPage(int page, boolean animate) {
+            int target = Math.max(0, Math.min(page, totalPages - 1));
+            currentPage = target;
+            float targetOffset = target * getWidth();
+            if (pageAnimator != null) {
+                pageAnimator.cancel();
+            }
+            if (animate) {
+                pageAnimator = ValueAnimator.ofFloat(pageOffset, targetOffset);
+                pageAnimator.setDuration(240);
+                pageAnimator.setInterpolator(new DecelerateInterpolator());
+                pageAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                    @Override
+                    public void onAnimationUpdate(ValueAnimator animation) {
+                        pageOffset = (float) animation.getAnimatedValue();
+                        invalidate();
+                    }
+                });
+                pageAnimator.start();
+            } else {
+                pageOffset = targetOffset;
+                invalidate();
+            }
+            notifyPageState();
+        }
+
+        private void notifySelection() {
+            if (selectionListener == null) return;
+            RenderNode node = renderNodeMap.get(selectedKey);
+            if (node == null) {
+                node = renderNodeMap.get("root");
+            }
+            if (node != null) {
+                selectionListener.onNodeSelected(node.node, node.accentColor);
+            }
+        }
+
+        private void notifyPageState() {
+            if (pageStateListener == null) return;
+            pageStateListener.onPageStateChanged(
+                    currentPage + 1,
+                    totalPages,
+                    currentPage > 0,
+                    currentPage < totalPages - 1);
+        }
+
+        private int mixColors(int from, int to, float ratio) {
+            float clamped = Math.max(0f, Math.min(1f, ratio));
+            int a = (int) (Color.alpha(from) * (1f - clamped) + Color.alpha(to) * clamped);
+            int r = (int) (Color.red(from) * (1f - clamped) + Color.red(to) * clamped);
+            int g = (int) (Color.green(from) * (1f - clamped) + Color.green(to) * clamped);
+            int b = (int) (Color.blue(from) * (1f - clamped) + Color.blue(to) * clamped);
+            return Color.argb(a, r, g, b);
+        }
+
+        private float toPx(float value) {
+            return getResources().getDisplayMetrics().density * value;
+        }
+
+        private class RenderNode {
+            final MindMapNode node;
+            final String key;
+            final RectF rect;
+            final int accentColor;
+            final String parentKey;
+            final int depth;
+            final boolean expandable;
+
+            RenderNode(MindMapNode node, String key, RectF rect, int accentColor, String parentKey, int depth, boolean expandable) {
+                this.node = node;
+                this.key = key;
+                this.rect = rect;
+                this.accentColor = accentColor;
+                this.parentKey = parentKey;
+                this.depth = depth;
+                this.expandable = expandable;
             }
         }
     }
