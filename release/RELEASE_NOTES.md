@@ -1,5 +1,6 @@
-# v2.10.30
+# v2.10.31
 
+- Auto release after fix: Mind map: rebuild progressive chapter maps
 - Auto release after fix: Mind map: keep fullscreen portrait
 - Auto release after fix: Mind map: add fullscreen and branch controls
 - Auto release after fix: Mind map: isolate canvas drag gestures
