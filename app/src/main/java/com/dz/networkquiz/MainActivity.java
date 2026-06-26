@@ -50,6 +50,7 @@ import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.Window;
+import android.view.WindowManager;
 import android.view.animation.AccelerateInterpolator;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.AdapterView;
@@ -127,6 +128,8 @@ public class MainActivity extends Activity {
     private static final int DEFAULT_WRONG_REQUIRED = 2;
     private static final int MIN_WRONG_REQUIRED = 1;
     private static final int MAX_WRONG_REQUIRED = 10;
+    private static final float MIND_MAP_MIN_SCALE = 0.12f;
+    private static final float MIND_MAP_MAX_SCALE = 1.75f;
 
     private final List<Question> allQuestions = new ArrayList<>();
     private final List<MemoryCard> allMemoryCards = new ArrayList<>();
@@ -2627,20 +2630,6 @@ public class MainActivity extends Activity {
                 card.mindMapTitle.length() == 0 ? card.knowledge : card.mindMapTitle,
                 card.mindMapNodes);
 
-        LinearLayout actionRow = new LinearLayout(this);
-        actionRow.setOrientation(LinearLayout.HORIZONTAL);
-        actionRow.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams actionRowLp = new LinearLayout.LayoutParams(-1, -2);
-        actionRowLp.topMargin = dp(10);
-        mapStage.addView(actionRow, actionRowLp);
-
-        Button expandAllButton = mindMapActionButton("全展", BLUE);
-        Button collapseAllButton = mindMapActionButton("收起", AMBER);
-        Button fullScreenButton = mindMapActionButton("全屏", GREEN);
-        actionRow.addView(expandAllButton, mindMapActionButtonLayout(true));
-        actionRow.addView(collapseAllButton, mindMapActionButtonLayout(true));
-        actionRow.addView(fullScreenButton, mindMapActionButtonLayout(false));
-
         FrameLayout boardShell = new FrameLayout(this);
         boardShell.setTag(TAG_MIND_MAP_BOARD);
         boardShell.setBackground(roundedStrokeBackground(
@@ -2668,6 +2657,21 @@ public class MainActivity extends Activity {
         chipLp.topMargin = dp(12);
         chipLp.rightMargin = dp(12);
         boardShell.addView(pageChip, chipLp);
+
+        LinearLayout boardControls = new LinearLayout(this);
+        boardControls.setOrientation(LinearLayout.HORIZONTAL);
+        boardControls.setGravity(Gravity.CENTER);
+        boardControls.setPadding(dp(8), dp(6), dp(8), dp(6));
+        boardControls.setBackground(roundedBackground(Color.argb(76, 255, 255, 255), 999));
+        Button expandAllButton = mindMapActionButton("全展", BLUE);
+        Button collapseAllButton = mindMapActionButton("收起", AMBER);
+        Button fullScreenButton = mindMapActionButton("全屏", GREEN);
+        boardControls.addView(expandAllButton, mindMapOverlayButtonLayout(true));
+        boardControls.addView(collapseAllButton, mindMapOverlayButtonLayout(true));
+        boardControls.addView(fullScreenButton, mindMapOverlayButtonLayout(false));
+        FrameLayout.LayoutParams controlsLp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        controlsLp.topMargin = dp(60);
+        boardShell.addView(boardControls, controlsLp);
 
         LinearLayout pagerRow = new LinearLayout(this);
         pagerRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -2862,75 +2866,53 @@ public class MainActivity extends Activity {
         return lp;
     }
 
+    private LinearLayout.LayoutParams mindMapOverlayButtonLayout(boolean withRightMargin) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(64), dp(36));
+        if (withRightMargin) {
+            lp.rightMargin = dp(6);
+        }
+        return lp;
+    }
+
+    private LinearLayout.LayoutParams mindMapFullScreenButtonLayout(boolean withRightMargin) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(52), dp(32));
+        if (withRightMargin) {
+            lp.rightMargin = dp(5);
+        }
+        return lp;
+    }
+
     private void showMindMapFullScreen(final MemoryCard card) {
         if (card == null || !card.hasMindMap()) return;
-        final Dialog dialog = new Dialog(this);
+
+        final Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setCancelable(true);
 
         FrameLayout shell = new FrameLayout(this);
-        shell.setPadding(dp(10), statusBarInset() + dp(8), dp(10), bottomSafeInset() + dp(10));
-        shell.setBackgroundColor(BG);
-
-        LinearLayout panel = new LinearLayout(this);
-        panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(12), dp(12), dp(12), dp(12));
-        panel.setBackground(roundedStrokeBackground(PANEL_ELEVATED, GLASS_STROKE, 26, 1));
-        shell.addView(panel, new FrameLayout.LayoutParams(-1, -1));
-
-        LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        panel.addView(header, new LinearLayout.LayoutParams(-1, -2));
-
-        LinearLayout titleBox = new LinearLayout(this);
-        titleBox.setOrientation(LinearLayout.VERTICAL);
-        TextView title = text("全屏导图", 18, TEXT, true);
-        TextView subtitle = text(card.mindMapTitle.length() == 0 ? card.knowledge : card.mindMapTitle, 11, MUTED, false);
-        subtitle.setSingleLine(true);
-        subtitle.setEllipsize(TextUtils.TruncateAt.END);
-        titleBox.addView(title, new LinearLayout.LayoutParams(-1, -2));
-        LinearLayout.LayoutParams subtitleLp = new LinearLayout.LayoutParams(-1, -2);
-        subtitleLp.topMargin = dp(3);
-        titleBox.addView(subtitle, subtitleLp);
-        header.addView(titleBox, new LinearLayout.LayoutParams(0, -2, 1f));
-
-        Button expandButton = mindMapActionButton("全展", BLUE);
-        Button collapseButton = mindMapActionButton("收起", AMBER);
-        Button closeButton = mindMapActionButton("退出", RED);
-        LinearLayout.LayoutParams headerButtonLp = new LinearLayout.LayoutParams(dp(64), dp(40));
-        headerButtonLp.leftMargin = dp(8);
-        header.addView(expandButton, headerButtonLp);
-        LinearLayout.LayoutParams collapseLp = new LinearLayout.LayoutParams(dp(64), dp(40));
-        collapseLp.leftMargin = dp(8);
-        header.addView(collapseButton, collapseLp);
-        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(dp(64), dp(40));
-        closeLp.leftMargin = dp(8);
-        header.addView(closeButton, closeLp);
+        shell.setPadding(0, 0, 0, 0);
+        shell.setBackgroundColor(THEME_LIGHT.equals(themeMode) ? Color.rgb(18, 24, 34) : Color.rgb(10, 15, 24));
 
         FrameLayout boardShell = new FrameLayout(this);
         boardShell.setTag(TAG_MIND_MAP_BOARD);
-        boardShell.setBackground(roundedStrokeBackground(
-                THEME_LIGHT.equals(themeMode) ? Color.argb(242, 20, 25, 34) : Color.argb(248, 13, 18, 28),
-                Color.argb(THEME_LIGHT.equals(themeMode) ? 124 : 84, 115, 152, 219),
-                24,
-                1));
-        LinearLayout.LayoutParams boardLp = new LinearLayout.LayoutParams(-1, 0, 1f);
-        boardLp.topMargin = dp(12);
-        panel.addView(boardShell, boardLp);
+        boardShell.setBackgroundColor(THEME_LIGHT.equals(themeMode) ? Color.rgb(18, 24, 34) : Color.rgb(10, 15, 24));
+        shell.addView(boardShell, new FrameLayout.LayoutParams(-1, -1));
 
         final MindMapCanvasView canvasView = new MindMapCanvasView(this,
                 card.mindMapTitle.length() == 0 ? card.knowledge : card.mindMapTitle,
                 card.mindMapNodes);
         boardShell.addView(canvasView, new FrameLayout.LayoutParams(-1, -1));
 
-        TextView boardTag = text("全屏画板", 12, Color.WHITE, true);
-        boardTag.setPadding(dp(10), dp(6), dp(10), dp(6));
-        boardTag.setBackground(roundedBackground(Color.argb(58, 255, 255, 255), 999));
-        FrameLayout.LayoutParams tagLp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
-        tagLp.topMargin = dp(12);
-        tagLp.leftMargin = dp(12);
-        boardShell.addView(boardTag, tagLp);
+        LinearLayout titleOverlay = new LinearLayout(this);
+        titleOverlay.setOrientation(LinearLayout.HORIZONTAL);
+        titleOverlay.setGravity(Gravity.CENTER_VERTICAL);
+        titleOverlay.setPadding(dp(12), dp(7), dp(12), dp(7));
+        titleOverlay.setBackground(roundedBackground(Color.argb(76, 255, 255, 255), 999));
+        TextView boardTag = text("全屏导图", 12, Color.WHITE, true);
+        titleOverlay.addView(boardTag, new LinearLayout.LayoutParams(-2, -2));
+        FrameLayout.LayoutParams titleLp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        titleLp.topMargin = dp(12);
+        boardShell.addView(titleOverlay, titleLp);
 
         final TextView pageChip = text("第 1 / 1 页", 12, Color.WHITE, true);
         pageChip.setPadding(dp(10), dp(6), dp(10), dp(6));
@@ -2940,29 +2922,33 @@ public class MainActivity extends Activity {
         chipLp.rightMargin = dp(12);
         boardShell.addView(pageChip, chipLp);
 
-        LinearLayout pagerRow = new LinearLayout(this);
-        pagerRow.setOrientation(LinearLayout.HORIZONTAL);
-        pagerRow.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams pagerLp = new LinearLayout.LayoutParams(-1, -2);
-        pagerLp.topMargin = dp(10);
-        panel.addView(pagerRow, pagerLp);
-
+        LinearLayout boardControls = new LinearLayout(this);
+        boardControls.setOrientation(LinearLayout.HORIZONTAL);
+        boardControls.setGravity(Gravity.CENTER);
+        boardControls.setPadding(dp(6), dp(5), dp(6), dp(5));
+        boardControls.setBackground(roundedBackground(Color.argb(82, 255, 255, 255), 999));
         final TextView prevButton = text("上一页", 13, BLUE, true);
-        prevButton.setGravity(Gravity.CENTER);
-        prevButton.setPadding(dp(14), dp(8), dp(14), dp(8));
-        pagerRow.addView(prevButton, new LinearLayout.LayoutParams(-2, -2));
-
-        final TextView pagerMeta = text("单指拖动 · 双指缩放", 12, MUTED, true);
-        pagerMeta.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams metaLp = new LinearLayout.LayoutParams(0, -2, 1f);
-        metaLp.leftMargin = dp(10);
-        metaLp.rightMargin = dp(10);
-        pagerRow.addView(pagerMeta, metaLp);
-
         final TextView nextButton = text("下一页", 13, AMBER, true);
+        Button expandButton = mindMapActionButton("全展", BLUE);
+        Button collapseButton = mindMapActionButton("收起", AMBER);
+        Button closeButton = mindMapActionButton("退出", RED);
+        prevButton.setGravity(Gravity.CENTER);
         nextButton.setGravity(Gravity.CENTER);
-        nextButton.setPadding(dp(14), dp(8), dp(14), dp(8));
-        pagerRow.addView(nextButton, new LinearLayout.LayoutParams(-2, -2));
+        prevButton.setPadding(dp(12), 0, dp(12), 0);
+        nextButton.setPadding(dp(12), 0, dp(12), 0);
+        prevButton.setTextSize(11);
+        nextButton.setTextSize(11);
+        expandButton.setTextSize(11);
+        collapseButton.setTextSize(11);
+        closeButton.setTextSize(11);
+        boardControls.addView(prevButton, mindMapFullScreenButtonLayout(true));
+        boardControls.addView(nextButton, mindMapFullScreenButtonLayout(true));
+        boardControls.addView(expandButton, mindMapFullScreenButtonLayout(true));
+        boardControls.addView(collapseButton, mindMapFullScreenButtonLayout(true));
+        boardControls.addView(closeButton, mindMapFullScreenButtonLayout(false));
+        FrameLayout.LayoutParams controlsLp = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        controlsLp.bottomMargin = dp(10);
+        boardShell.addView(boardControls, controlsLp);
         styleMindMapPagerButton(prevButton, BLUE, false);
         styleMindMapPagerButton(nextButton, AMBER, false);
 
@@ -3005,12 +2991,28 @@ public class MainActivity extends Activity {
             }
         });
         canvasView.selectInitialNode();
+        canvasView.post(new Runnable() {
+            @Override
+            public void run() {
+                canvasView.fitWholeMap();
+            }
+        });
 
         dialog.setContentView(shell);
         dialog.show();
         if (dialog.getWindow() != null) {
-            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            Window window = dialog.getWindow();
+            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            window.getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         }
     }
 
@@ -7064,7 +7066,7 @@ public class MainActivity extends Activity {
             if (!renderNodeMap.containsKey(selectedKey)) {
                 selectedKey = "root";
             }
-            focusPageForKey(selectedKey, true);
+            fitWholeMap();
             notifySelection();
             invalidate();
         }
@@ -7080,6 +7082,31 @@ public class MainActivity extends Activity {
             ensureLayout();
             focusPageForKey("root", true);
             notifySelection();
+            invalidate();
+        }
+
+        void fitWholeMap() {
+            if (pageAnimator != null) {
+                pageAnimator.cancel();
+            }
+            ensureLayout();
+            if (getWidth() <= 0 || getHeight() <= 0 || contentWidth <= 0 || contentHeight <= 0) {
+                post(new Runnable() {
+                    @Override
+                    public void run() {
+                        fitWholeMap();
+                    }
+                });
+                return;
+            }
+            float targetScale = Math.min(
+                    getWidth() / Math.max(1f, contentWidth + dp(56)),
+                    getHeight() / Math.max(1f, contentHeight + dp(56)));
+            viewportScale = clampFloat(targetScale, MIND_MAP_MIN_SCALE, 1.05f);
+            pageOffset = 0f;
+            viewportOffsetY = 0f;
+            clampViewport();
+            updatePageMetrics();
             invalidate();
         }
 
@@ -7338,7 +7365,7 @@ public class MainActivity extends Activity {
 
         private void scaleViewport(float factor, float focusX, float focusY) {
             float oldScale = viewportScale;
-            float newScale = clampFloat(oldScale * factor, 0.72f, 1.65f);
+            float newScale = clampFloat(oldScale * factor, MIND_MAP_MIN_SCALE, MIND_MAP_MAX_SCALE);
             if (Math.abs(newScale - oldScale) < 0.001f) {
                 return;
             }
