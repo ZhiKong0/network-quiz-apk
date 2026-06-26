@@ -3,16 +3,16 @@
   "versionCode": 54,
   "versionName": "2.10.29",
   "apkFileName": "review-baodian.apk",
-  "apkDownloadUrl": "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
+  "apkDownloadUrl": "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.29/review-baodian.apk",
   "apkDownloadCandidates": [
-    "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
-    "https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
     "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.29/review-baodian.apk",
-    "https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.29/review-baodian.apk"
+    "https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.29/review-baodian.apk",
+    "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
+    "https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk"
   ],
-  "releaseHtmlUrl": "https://github.com/ZhiKong0/review-baodian-apk/releases/latest",
+  "releaseHtmlUrl": "https://github.com/ZhiKong0/review-baodian-apk/releases/tag/v2.10.29",
   "releaseNotes": "# v2.10.29\n\n- Auto release after fix: Mind map: add fullscreen and branch controls\n- Auto release after fix: Mind map: isolate canvas drag gestures\n- Auto release after fix: Mind map: add draggable zoomable canvas\n- Auto release after fix: Release: clean update notes text\n- 思维导图画板支持单指拖动和双指缩放，导图区域内滑动不会再被外层页面或知识点切换抢走。\n- 修复 Markdown 表格横向滑动时误触题目翻页的问题；现在在表格里左右滑动只滚动表格，不会切到上一题或下一题。\n- 75 道多选题已改为“选项 / 结论 / 辨析”表格化解析，每个选项都说明为什么选或不选。\n- 继续清理模板化理由，去掉“本来正确所以不选”这类空泛表达，让小白能直接看出本题考点。\n- 保留 `核心知识点 / 题目变形 / 知识拓展` 三段结构，方便刷题后复习。",
   "apkSize": 1038901,
-  "sha256": "7eb303a468ab8e68601aa4fd462138e98cc95de40522563ab21d1d5c2b2d1da3",
-  "generatedAt": "2026-06-26T15:47:25.481266+00:00"
+  "sha256": "6fb9dd57bed6def7286a621114b0f5f25427a1f46ac30694c56858d86d176d08",
+  "generatedAt": "2026-06-26T15:55:32.798771+00:00"
 }
