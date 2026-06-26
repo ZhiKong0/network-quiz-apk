@@ -61,6 +61,8 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.Spinner;
+import android.widget.TableLayout;
+import android.widget.TableRow;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -2943,11 +2945,18 @@ public class MainActivity extends Activity {
         String[] lines = markdown.replace("\r\n", "\n").replace('\r', '\n').split("\n");
         StringBuilder paragraph = new StringBuilder();
         boolean inOptionJudgmentSection = false;
-        for (String rawLine : lines) {
+        for (int i = 0; i < lines.length; i++) {
+            String rawLine = lines[i];
             String line = rawLine.trim();
             if (line.length() == 0) {
                 flushMarkdownParagraph(container, paragraph);
                 addMarkdownSpacer(container, dp(4));
+                inOptionJudgmentSection = false;
+                continue;
+            }
+            if (isMarkdownTableStart(lines, i)) {
+                flushMarkdownParagraph(container, paragraph);
+                i = addMarkdownTableBlock(container, lines, i);
                 inOptionJudgmentSection = false;
                 continue;
             }
@@ -2981,6 +2990,159 @@ public class MainActivity extends Activity {
             }
         }
         flushMarkdownParagraph(container, paragraph);
+    }
+
+    private boolean isMarkdownTableStart(String[] lines, int index) {
+        if (lines == null || index < 0 || index + 1 >= lines.length) return false;
+        String header = lines[index] == null ? "" : lines[index].trim();
+        String separator = lines[index + 1] == null ? "" : lines[index + 1].trim();
+        return looksLikeMarkdownTableRow(header) && isMarkdownTableSeparator(separator);
+    }
+
+    private boolean looksLikeMarkdownTableRow(String line) {
+        if (line == null) return false;
+        String trimmed = line.trim();
+        if (trimmed.length() < 5) return false;
+        if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) return false;
+        return trimmed.indexOf('|', 1) > 1;
+    }
+
+    private boolean isMarkdownTableSeparator(String line) {
+        if (!looksLikeMarkdownTableRow(line)) return false;
+        List<String> cells = splitMarkdownTableRow(line);
+        if (cells.isEmpty()) return false;
+        for (String cell : cells) {
+            String normalized = cell.replace(" ", "");
+            if (!normalized.matches(":?-{3,}:?")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private List<String> splitMarkdownTableRow(String line) {
+        List<String> cells = new ArrayList<>();
+        if (line == null) return cells;
+        String trimmed = line.trim();
+        if (trimmed.startsWith("|")) trimmed = trimmed.substring(1);
+        if (trimmed.endsWith("|")) trimmed = trimmed.substring(0, trimmed.length() - 1);
+        String[] parts = trimmed.split("\\|", -1);
+        for (String part : parts) {
+            cells.add(part.trim());
+        }
+        return cells;
+    }
+
+    private int addMarkdownTableBlock(LinearLayout container, String[] lines, int startIndex) {
+        List<List<String>> rows = new ArrayList<>();
+        List<String> header = splitMarkdownTableRow(lines[startIndex]);
+        int columnCount = header.size();
+        int index = startIndex + 2;
+        while (index < lines.length) {
+            String rowLine = lines[index] == null ? "" : lines[index].trim();
+            if (!looksLikeMarkdownTableRow(rowLine) || isMarkdownTableSeparator(rowLine)) break;
+            List<String> row = splitMarkdownTableRow(rowLine);
+            if (!row.isEmpty()) {
+                while (row.size() < columnCount) row.add("");
+                if (row.size() > columnCount) row = new ArrayList<>(row.subList(0, columnCount));
+                rows.add(row);
+            }
+            index++;
+        }
+        addMarkdownTable(container, header, rows);
+        return index - 1;
+    }
+
+    private void addMarkdownTable(LinearLayout container, List<String> header, List<List<String>> rows) {
+        if (header == null || header.isEmpty()) return;
+
+        HorizontalScrollView scroll = new HorizontalScrollView(this);
+        scroll.setHorizontalScrollBarEnabled(false);
+        scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setPadding(dp(1), dp(1), dp(1), dp(1));
+        shell.setBackground(markdownTableShellBackground());
+
+        TableLayout table = new TableLayout(this);
+        table.setShrinkAllColumns(false);
+        table.setStretchAllColumns(false);
+        table.setPadding(0, 0, 0, 0);
+
+        table.addView(buildMarkdownTableRow(header, true, false, header.size()));
+        for (int i = 0; i < rows.size(); i++) {
+            table.addView(buildMarkdownTableRow(rows.get(i), false, i % 2 == 1, header.size()));
+        }
+
+        shell.addView(table, new LinearLayout.LayoutParams(-2, -2));
+        scroll.addView(shell, new ViewGroup.LayoutParams(-2, -2));
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.topMargin = dp(8);
+        lp.bottomMargin = dp(10);
+        container.addView(scroll, lp);
+    }
+
+    private TableRow buildMarkdownTableRow(List<String> cells, boolean headerRow, boolean alternateRow, int columnCount) {
+        TableRow row = new TableRow(this);
+        row.setPadding(0, 0, 0, 0);
+        for (int i = 0; i < columnCount; i++) {
+            String value = i < cells.size() ? cells.get(i) : "";
+            TextView tv = text("", headerRow ? 14 : 14, TEXT, headerRow);
+            tv.setText(inlineMarkdown(value));
+            tv.setPadding(dp(12), dp(headerRow ? 11 : 10), dp(12), dp(headerRow ? 11 : 10));
+            tv.setLineSpacing(dp(3), 1.0f);
+            tv.setMinWidth(dp(columnCount <= 2 ? 160 : columnCount == 3 ? 126 : 104));
+            tv.setBackground(markdownTableCellBackground(headerRow, alternateRow));
+            TableRow.LayoutParams lp = new TableRow.LayoutParams(-2, -2);
+            lp.setMargins(0, 0, dp(1), dp(1));
+            row.addView(tv, lp);
+        }
+        return row;
+    }
+
+    private GradientDrawable markdownTableShellBackground() {
+        int fill = THEME_LIGHT.equals(themeMode)
+                ? Color.argb(210, 248, 250, 255)
+                : Color.argb(120, 255, 255, 255);
+        int stroke = THEME_LIGHT.equals(themeMode)
+                ? Color.argb(96, 196, 208, 228)
+                : Color.argb(58, 220, 230, 250);
+        GradientDrawable drawable = roundedBackground(fill, 18);
+        drawable.setStroke(dp(1), stroke);
+        return drawable;
+    }
+
+    private GradientDrawable markdownTableCellBackground(boolean headerRow, boolean alternateRow) {
+        int fill;
+        int stroke;
+        if (headerRow) {
+            fill = THEME_LIGHT.equals(themeMode)
+                    ? Color.argb(244, 239, 243, 250)
+                    : Color.argb(170, 53, 60, 76);
+            stroke = THEME_LIGHT.equals(themeMode)
+                    ? Color.argb(82, 205, 214, 232)
+                    : Color.argb(42, 255, 255, 255);
+        } else if (alternateRow) {
+            fill = THEME_LIGHT.equals(themeMode)
+                    ? Color.argb(238, 251, 253, 255)
+                    : Color.argb(106, 34, 39, 51);
+            stroke = THEME_LIGHT.equals(themeMode)
+                    ? Color.argb(58, 215, 223, 238)
+                    : Color.argb(28, 255, 255, 255);
+        } else {
+            fill = THEME_LIGHT.equals(themeMode)
+                    ? Color.argb(246, 255, 255, 255)
+                    : Color.argb(132, 40, 46, 60);
+            stroke = THEME_LIGHT.equals(themeMode)
+                    ? Color.argb(52, 215, 223, 238)
+                    : Color.argb(30, 255, 255, 255);
+        }
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(fill);
+        drawable.setStroke(dp(1), stroke);
+        return drawable;
     }
 
     private void flushMarkdownParagraph(LinearLayout container, StringBuilder paragraph) {
