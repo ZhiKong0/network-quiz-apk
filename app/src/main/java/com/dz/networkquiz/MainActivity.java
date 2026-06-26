@@ -44,9 +44,11 @@ import android.graphics.RectF;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.Window;
 import android.view.animation.AccelerateInterpolator;
 import android.view.animation.DecelerateInterpolator;
@@ -2457,7 +2459,7 @@ public class MainActivity extends Activity {
         addCardSubhead(cardBox, card.chapter + "  ·  覆盖 " + card.questionCount + " 题");
         addCardDivider(cardBox);
         addMindMapSection(cardBox, card);
-        addCardHint(cardBox, "上一页 / 下一页切换导图页 · 轻点节点展开分支 · 左右滑动切换知识点");
+        addCardHint(cardBox, "导图内可拖动、双指缩放 · 轻点节点展开分支 · 左右滑动切换知识点");
         addCardBottomSpacer(cardBox, 56);
 
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
@@ -2586,7 +2588,7 @@ public class MainActivity extends Activity {
         mapStage.setPadding(dp(14), dp(14), dp(14), dp(14));
         mapStage.setBackground(roundedBackground(CARD_SECTION, 20));
 
-        TextView guide = text("导图模式：先看主干，再用上一页 / 下一页推进到更深分支；轻点节点会展开，并同步下方详细说明。", 13, MUTED, false);
+        TextView guide = text("导图模式：单指拖动画布，双指缩放；轻点节点展开分支，并同步下方详细说明。上一页 / 下一页可快速跳到左右分区。", 13, MUTED, false);
         guide.setLineSpacing(dp(3), 1.0f);
         mapStage.addView(guide, new LinearLayout.LayoutParams(-1, -2));
 
@@ -2604,7 +2606,7 @@ public class MainActivity extends Activity {
                 card.mindMapNodes);
         boardShell.addView(canvasView, new FrameLayout.LayoutParams(-1, -1));
 
-        final TextView boardTag = text("NotebookLM 风格导图", 12, Color.WHITE, true);
+        final TextView boardTag = text("可拖动画板", 12, Color.WHITE, true);
         boardTag.setPadding(dp(10), dp(6), dp(10), dp(6));
         boardTag.setBackground(roundedBackground(Color.argb(58, 255, 255, 255), 999));
         FrameLayout.LayoutParams tagLp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
@@ -6704,6 +6706,7 @@ public class MainActivity extends Activity {
         private final List<RenderNode> renderNodes = new ArrayList<>();
         private final Map<String, RenderNode> renderNodeMap = new LinkedHashMap<>();
         private final Set<String> expandedKeys = new LinkedHashSet<>();
+        private final ScaleGestureDetector scaleGestureDetector;
         private MindMapSelectionListener selectionListener;
         private MindMapPageStateListener pageStateListener;
         private String selectedKey = "root";
@@ -6711,7 +6714,17 @@ public class MainActivity extends Activity {
         private int currentPage = 0;
         private int totalPages = 1;
         private int contentWidth = 0;
+        private int contentHeight = 0;
         private float pageOffset = 0f;
+        private float viewportOffsetY = 0f;
+        private float viewportScale = 1f;
+        private float touchDownX = 0f;
+        private float touchDownY = 0f;
+        private float lastTouchX = 0f;
+        private float lastTouchY = 0f;
+        private int activePointerId = -1;
+        private boolean draggingCanvas = false;
+        private boolean scalingCanvas = false;
         private ValueAnimator pageAnimator;
 
         MindMapCanvasView(Context context, String rootTitle, List<MindMapNode> nodes) {
@@ -6750,6 +6763,28 @@ public class MainActivity extends Activity {
             titlePaint.setFakeBoldText(true);
             badgePaint.setTextSize(dp(10));
             badgePaint.setFakeBoldText(true);
+            scaleGestureDetector = new ScaleGestureDetector(context, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                @Override
+                public boolean onScaleBegin(ScaleGestureDetector detector) {
+                    scalingCanvas = true;
+                    requestMindMapNoIntercept(true);
+                    return true;
+                }
+
+                @Override
+                public boolean onScale(ScaleGestureDetector detector) {
+                    scaleViewport(detector.getScaleFactor(), detector.getFocusX(), detector.getFocusY());
+                    return true;
+                }
+
+                @Override
+                public void onScaleEnd(ScaleGestureDetector detector) {
+                    scalingCanvas = false;
+                    clampViewport();
+                    updatePageMetrics();
+                    invalidate();
+                }
+            });
             setClickable(true);
         }
 
@@ -6788,37 +6823,87 @@ public class MainActivity extends Activity {
 
         @Override
         public boolean onTouchEvent(MotionEvent event) {
+            scaleGestureDetector.onTouchEvent(event);
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
-                    getParent().requestDisallowInterceptTouchEvent(true);
+                    if (pageAnimator != null) {
+                        pageAnimator.cancel();
+                    }
+                    activePointerId = event.getPointerId(0);
+                    touchDownX = lastTouchX = event.getX();
+                    touchDownY = lastTouchY = event.getY();
+                    draggingCanvas = false;
+                    scalingCanvas = false;
+                    requestMindMapNoIntercept(true);
+                    return true;
+                case MotionEvent.ACTION_POINTER_UP:
+                    handlePointerUp(event);
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    if (event.getPointerCount() > 1 || scalingCanvas) {
+                        requestMindMapNoIntercept(true);
+                        return true;
+                    }
+                    int pointerIndex = event.findPointerIndex(activePointerId);
+                    if (pointerIndex < 0) {
+                        return true;
+                    }
+                    float x = event.getX(pointerIndex);
+                    float y = event.getY(pointerIndex);
+                    float dx = x - lastTouchX;
+                    float dy = y - lastTouchY;
+                    float totalDx = x - touchDownX;
+                    float totalDy = y - touchDownY;
+                    if (!draggingCanvas
+                            && (Math.abs(totalDx) > Math.max(touchSlop, dp(8))
+                            || Math.abs(totalDy) > Math.max(touchSlop, dp(8)))) {
+                        draggingCanvas = true;
+                    }
+                    if (draggingCanvas) {
+                        panViewport(-dx / viewportScale, -dy / viewportScale);
+                    }
+                    lastTouchX = x;
+                    lastTouchY = y;
+                    requestMindMapNoIntercept(true);
                     return true;
                 case MotionEvent.ACTION_UP:
-                    getParent().requestDisallowInterceptTouchEvent(false);
-                    RenderNode hit = findNodeAt(event.getX(), event.getY());
-                    if (hit != null) {
-                        performClick();
-                        selectedKey = hit.key;
-                        if (hit.expandable && !"root".equals(hit.key)) {
-                            if (expandedKeys.contains(hit.key)) {
-                                expandedKeys.remove(hit.key);
-                            } else {
-                                expandedKeys.add(hit.key);
+                    boolean wasDragging = draggingCanvas || scalingCanvas;
+                    draggingCanvas = false;
+                    scalingCanvas = false;
+                    activePointerId = -1;
+                    requestMindMapNoIntercept(false);
+                    if (!wasDragging
+                            && Math.abs(event.getX() - touchDownX) < dp(10)
+                            && Math.abs(event.getY() - touchDownY) < dp(10)) {
+                        RenderNode hit = findNodeAt(event.getX(), event.getY());
+                        if (hit != null) {
+                            performClick();
+                            selectedKey = hit.key;
+                            if (hit.expandable && !"root".equals(hit.key)) {
+                                if (expandedKeys.contains(hit.key)) {
+                                    expandedKeys.remove(hit.key);
+                                } else {
+                                    expandedKeys.add(hit.key);
+                                }
+                                layoutDirty = true;
+                                ensureLayout();
                             }
-                            layoutDirty = true;
-                            ensureLayout();
+                            focusPageForKey(hit.key, true);
+                            notifySelection();
+                            invalidate();
+                            return true;
                         }
-                        focusPageForKey(hit.key, true);
-                        notifySelection();
-                        invalidate();
-                        return true;
                     }
                     performClick();
                     return true;
                 case MotionEvent.ACTION_CANCEL:
-                    getParent().requestDisallowInterceptTouchEvent(false);
+                    draggingCanvas = false;
+                    scalingCanvas = false;
+                    activePointerId = -1;
+                    requestMindMapNoIntercept(false);
                     return true;
                 default:
-                    return super.onTouchEvent(event);
+                    return true;
             }
         }
 
@@ -6834,7 +6919,8 @@ public class MainActivity extends Activity {
             super.onDraw(canvas);
             ensureLayout();
             canvas.save();
-            canvas.translate(-pageOffset, 0f);
+            canvas.scale(viewportScale, viewportScale);
+            canvas.translate(-pageOffset, -viewportOffsetY);
 
             for (RenderNode node : renderNodes) {
                 if (node.parentKey == null) continue;
@@ -6861,13 +6947,12 @@ public class MainActivity extends Activity {
             float padding = dp(18);
             float totalHeight = measureSubtree(rootNode, "root", 0);
             contentWidth = (int) Math.ceil(layoutNode(rootNode, "root", 0, padding, padding, totalHeight, BLUE, null));
-            totalPages = Math.max(1, (int) Math.ceil((contentWidth + padding) / Math.max(1f, getWidth())));
-            currentPage = Math.max(0, Math.min(currentPage, totalPages - 1));
+            contentHeight = (int) Math.ceil(totalHeight + padding * 2f);
             if (pageAnimator == null || !pageAnimator.isRunning()) {
-                pageOffset = currentPage * getWidth();
+                clampViewport();
             }
+            updatePageMetrics();
             layoutDirty = false;
-            notifyPageState();
             invalidate();
         }
 
@@ -6933,6 +7018,92 @@ public class MainActivity extends Activity {
             int base = root ? dp(84) : dp(72);
             int extra = node.badge.length() > 0 ? dp(22) : 0;
             return Math.max(base, layout.getHeight() + extra + dp(26));
+        }
+
+        private void requestMindMapNoIntercept(boolean disallow) {
+            ViewParent parent = getParent();
+            while (parent != null) {
+                parent.requestDisallowInterceptTouchEvent(disallow);
+                if (parent instanceof View) {
+                    parent = ((View) parent).getParent();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        private void handlePointerUp(MotionEvent event) {
+            int pointerIndex = event.getActionIndex();
+            int pointerId = event.getPointerId(pointerIndex);
+            if (pointerId != activePointerId) {
+                return;
+            }
+            int nextIndex = pointerIndex == 0 ? 1 : 0;
+            if (nextIndex >= event.getPointerCount()) {
+                activePointerId = -1;
+                return;
+            }
+            activePointerId = event.getPointerId(nextIndex);
+            lastTouchX = event.getX(nextIndex);
+            lastTouchY = event.getY(nextIndex);
+            touchDownX = lastTouchX;
+            touchDownY = lastTouchY;
+        }
+
+        private void panViewport(float dx, float dy) {
+            pageOffset += dx;
+            viewportOffsetY += dy;
+            clampViewport();
+            updatePageMetrics();
+            invalidate();
+        }
+
+        private void scaleViewport(float factor, float focusX, float focusY) {
+            float oldScale = viewportScale;
+            float newScale = clampFloat(oldScale * factor, 0.72f, 1.65f);
+            if (Math.abs(newScale - oldScale) < 0.001f) {
+                return;
+            }
+            float worldFocusX = focusX / oldScale + pageOffset;
+            float worldFocusY = focusY / oldScale + viewportOffsetY;
+            viewportScale = newScale;
+            pageOffset = worldFocusX - focusX / newScale;
+            viewportOffsetY = worldFocusY - focusY / newScale;
+            clampViewport();
+            updatePageMetrics();
+            invalidate();
+        }
+
+        private void clampViewport() {
+            if (getWidth() <= 0 || getHeight() <= 0) {
+                pageOffset = 0f;
+                viewportOffsetY = 0f;
+                return;
+            }
+            float extra = dp(24);
+            float maxX = Math.max(0f, contentWidth + extra - viewportWorldWidth());
+            float maxY = Math.max(0f, contentHeight + extra - viewportWorldHeight());
+            pageOffset = clampFloat(pageOffset, 0f, maxX);
+            viewportOffsetY = clampFloat(viewportOffsetY, 0f, maxY);
+        }
+
+        private float viewportWorldWidth() {
+            return getWidth() / Math.max(0.01f, viewportScale);
+        }
+
+        private float viewportWorldHeight() {
+            return getHeight() / Math.max(0.01f, viewportScale);
+        }
+
+        private float clampFloat(float value, float min, float max) {
+            return Math.max(min, Math.min(max, value));
+        }
+
+        private void updatePageMetrics() {
+            float worldPageWidth = Math.max(1f, viewportWorldWidth());
+            totalPages = Math.max(1, (int) Math.ceil((contentWidth + dp(18)) / worldPageWidth));
+            currentPage = Math.max(0, Math.min(totalPages - 1, (int) Math.floor((pageOffset + worldPageWidth * 0.45f) / worldPageWidth)));
+            notifyPageState();
         }
 
         private void drawConnector(Canvas canvas, RenderNode parent, RenderNode child) {
@@ -7017,10 +7188,11 @@ public class MainActivity extends Activity {
         }
 
         private RenderNode findNodeAt(float x, float y) {
-            float worldX = x + pageOffset;
+            float worldX = x / viewportScale + pageOffset;
+            float worldY = y / viewportScale + viewportOffsetY;
             for (int i = renderNodes.size() - 1; i >= 0; i--) {
                 RenderNode node = renderNodes.get(i);
-                if (node.rect.contains(worldX, y)) {
+                if (node.rect.contains(worldX, worldY)) {
                     return node;
                 }
             }
@@ -7042,34 +7214,51 @@ public class MainActivity extends Activity {
         private void focusPageForKey(String key, boolean animate) {
             RenderNode node = renderNodeMap.get(key);
             if (node == null || getWidth() <= 0) return;
-            int targetPage = Math.max(0, Math.min(totalPages - 1, (int) (node.rect.centerX() / getWidth())));
-            goToPage(targetPage, animate);
+            float targetX = node.rect.centerX() - viewportWorldWidth() * 0.5f;
+            float targetY = node.rect.centerY() - viewportWorldHeight() * 0.5f;
+            goToViewport(targetX, targetY, animate);
         }
 
         private void goToPage(int page, boolean animate) {
             int target = Math.max(0, Math.min(page, totalPages - 1));
-            currentPage = target;
-            float targetOffset = target * getWidth();
+            float targetOffset = target * viewportWorldWidth();
+            goToViewport(targetOffset, viewportOffsetY, animate);
+        }
+
+        private void goToViewport(float targetX, float targetY, boolean animate) {
+            float oldX = pageOffset;
+            float oldY = viewportOffsetY;
+            pageOffset = targetX;
+            viewportOffsetY = targetY;
+            clampViewport();
+            final float safeTargetX = pageOffset;
+            final float safeTargetY = viewportOffsetY;
+            pageOffset = oldX;
+            viewportOffsetY = oldY;
             if (pageAnimator != null) {
                 pageAnimator.cancel();
             }
             if (animate) {
-                pageAnimator = ValueAnimator.ofFloat(pageOffset, targetOffset);
+                pageAnimator = ValueAnimator.ofFloat(0f, 1f);
                 pageAnimator.setDuration(240);
                 pageAnimator.setInterpolator(new DecelerateInterpolator());
                 pageAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                     @Override
                     public void onAnimationUpdate(ValueAnimator animation) {
-                        pageOffset = (float) animation.getAnimatedValue();
+                        float progress = (float) animation.getAnimatedValue();
+                        pageOffset = oldX + (safeTargetX - oldX) * progress;
+                        viewportOffsetY = oldY + (safeTargetY - oldY) * progress;
+                        updatePageMetrics();
                         invalidate();
                     }
                 });
                 pageAnimator.start();
             } else {
-                pageOffset = targetOffset;
+                pageOffset = safeTargetX;
+                viewportOffsetY = safeTargetY;
+                updatePageMetrics();
                 invalidate();
             }
-            notifyPageState();
         }
 
         private void notifySelection() {
