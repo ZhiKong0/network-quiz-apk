@@ -1,5 +1,6 @@
-# v2.10.29
+# v2.10.30
 
+- Auto release after fix: Mind map: keep fullscreen portrait
 - Auto release after fix: Mind map: add fullscreen and branch controls
 - Auto release after fix: Mind map: isolate canvas drag gestures
 - Auto release after fix: Mind map: add draggable zoomable canvas
