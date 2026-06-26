@@ -33,6 +33,10 @@ import android.text.TextUtils;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.style.StyleSpan;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.RectF;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -47,6 +51,7 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -437,9 +442,191 @@ public class MainActivity extends Activity {
                         "",
                         ""));
             }
+            applyMemoryCardOverrides();
         } catch (Exception ignored) {
             allMemoryCards.clear();
         }
+    }
+
+    private void applyMemoryCardOverrides() {
+        try {
+            String json = readAssetText("chapter_card_overrides.json");
+            JSONArray arr = new JSONArray(json);
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject obj = arr.getJSONObject(i);
+                String mode = obj.optString("mode", "replace");
+                if ("insert".equals(mode)) {
+                    insertMemoryCardOverride(obj);
+                } else {
+                    replaceMemoryCardOverride(obj);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void replaceMemoryCardOverride(JSONObject obj) {
+        int index = findMemoryCardOverrideIndex(obj);
+        if (index < 0) return;
+        MemoryCard base = allMemoryCards.get(index);
+        allMemoryCards.set(index, mergeMemoryCard(base, obj, false));
+    }
+
+    private void insertMemoryCardOverride(JSONObject obj) {
+        String chapter = obj.optString("chapter", "");
+        if (chapter.length() == 0) return;
+        int insertAt = allMemoryCards.size();
+        for (int i = 0; i < allMemoryCards.size(); i++) {
+            MemoryCard card = allMemoryCards.get(i);
+            if (chapter.equals(card.chapter)) {
+                insertAt = i;
+                break;
+            }
+        }
+        MemoryCard card = createInsertedMemoryCard(obj, chapter);
+        allMemoryCards.add(insertAt, card);
+    }
+
+    private MemoryCard createInsertedMemoryCard(JSONObject obj, String chapter) {
+        List<MemoryCard> chapterCards = chapterCardsWithoutOverview(chapter);
+        int questionCount = obj.optInt("questionCount", 0);
+        if (questionCount <= 0) {
+            for (MemoryCard card : chapterCards) {
+                questionCount += card.questionCount;
+            }
+        }
+        List<String> labels = jsonStringList(obj.optJSONArray("labels"));
+        if (labels.isEmpty()) {
+            LinkedHashSet<String> dedup = new LinkedHashSet<>();
+            for (MemoryCard card : chapterCards) {
+                addDelimitedLabels(dedup, card.labels);
+            }
+            labels = new ArrayList<>(dedup);
+        }
+        String chapterMap = obj.optString("chapterMap", "");
+        if (chapterMap.length() == 0 && !chapterCards.isEmpty()) {
+            chapterMap = chapterCards.get(0).chapterMap;
+        }
+        return new MemoryCard(
+                chapter,
+                obj.optString("knowledge", ""),
+                questionCount,
+                join(labels, "、"),
+                obj.optString("layerHint", ""),
+                chapterMap,
+                obj.optString("typeDistribution", ""),
+                jsonStringList(obj.optJSONArray("eyeLines")),
+                jsonStringList(obj.optJSONArray("selfChecks")),
+                jsonStringList(obj.optJSONArray("corePoints")),
+                jsonStringList(obj.optJSONArray("mustRemember")),
+                jsonStringList(obj.optJSONArray("traps")),
+                jsonStringList(obj.optJSONArray("questionTips")),
+                obj.optString("frontMarkdown", ""),
+                obj.optString("backMarkdown", ""),
+                true,
+                obj.optString("mindMapTitle", ""),
+                jsonMindMapNodes(obj.optJSONArray("mindMapNodes")));
+    }
+
+    private MemoryCard mergeMemoryCard(MemoryCard base, JSONObject obj, boolean overviewCard) {
+        return new MemoryCard(
+                emptyFallback(obj.optString("chapter", ""), base.chapter),
+                emptyFallback(obj.optString("knowledge", ""), base.knowledge),
+                obj.optInt("questionCount", base.questionCount),
+                join(jsonStringListOrFallback(obj.optJSONArray("labels"), base.labels), "、"),
+                emptyFallback(obj.optString("layerHint", ""), base.layerHint),
+                emptyFallback(obj.optString("chapterMap", ""), base.chapterMap),
+                emptyFallback(obj.optString("typeDistribution", ""), base.typeDistribution),
+                listFallback(jsonStringList(obj.optJSONArray("eyeLines")), base.eyeLines),
+                listFallback(jsonStringList(obj.optJSONArray("selfChecks")), base.selfChecks),
+                listFallback(jsonStringList(obj.optJSONArray("corePoints")), base.corePoints),
+                listFallback(jsonStringList(obj.optJSONArray("mustRemember")), base.mustRemember),
+                listFallback(jsonStringList(obj.optJSONArray("traps")), base.traps),
+                listFallback(jsonStringList(obj.optJSONArray("questionTips")), base.questionTips),
+                emptyFallback(obj.optString("frontMarkdown", ""), base.frontMarkdown),
+                emptyFallback(obj.optString("backMarkdown", ""), base.backMarkdown),
+                overviewCard || base.overviewCard,
+                emptyFallback(obj.optString("mindMapTitle", ""), base.mindMapTitle),
+                mindMapFallback(jsonMindMapNodes(obj.optJSONArray("mindMapNodes")), base.mindMapNodes));
+    }
+
+    private int findMemoryCardOverrideIndex(JSONObject obj) {
+        String chapter = obj.optString("chapter", "");
+        String knowledge = obj.optString("knowledge", "");
+        String matchLabel = obj.optString("matchLabel", "");
+        for (int i = 0; i < allMemoryCards.size(); i++) {
+            MemoryCard card = allMemoryCards.get(i);
+            if (chapter.length() > 0 && !chapter.equals(card.chapter)) continue;
+            if (knowledge.length() > 0 && !knowledge.equals(card.knowledge)) continue;
+            if (matchLabel.length() > 0 && !containsDelimitedLabel(card.labels, matchLabel)) continue;
+            return i;
+        }
+        return -1;
+    }
+
+    private boolean containsDelimitedLabel(String labels, String expected) {
+        if (labels == null || labels.length() == 0) return false;
+        String[] parts = labels.split("、");
+        for (String part : parts) {
+            if (expected.equals(part.trim())) return true;
+        }
+        return false;
+    }
+
+    private List<String> jsonStringListOrFallback(JSONArray arr, String delimitedFallback) {
+        List<String> values = jsonStringList(arr);
+        if (!values.isEmpty()) return values;
+        LinkedHashSet<String> dedup = new LinkedHashSet<>();
+        addDelimitedLabels(dedup, delimitedFallback);
+        return new ArrayList<>(dedup);
+    }
+
+    private void addDelimitedLabels(Set<String> target, String labels) {
+        if (labels == null || labels.trim().length() == 0) return;
+        String[] parts = labels.split("、");
+        for (String part : parts) {
+            String trimmed = part.trim();
+            if (trimmed.length() > 0) {
+                target.add(trimmed);
+            }
+        }
+    }
+
+    private List<String> listFallback(List<String> candidate, List<String> fallback) {
+        return candidate == null || candidate.isEmpty() ? new ArrayList<>(fallback) : candidate;
+    }
+
+    private List<MindMapNode> mindMapFallback(List<MindMapNode> candidate, List<MindMapNode> fallback) {
+        return candidate == null || candidate.isEmpty() ? new ArrayList<>(fallback) : candidate;
+    }
+
+    private String emptyFallback(String candidate, String fallback) {
+        return candidate == null || candidate.trim().length() == 0 ? fallback : candidate;
+    }
+
+    private List<MindMapNode> jsonMindMapNodes(JSONArray arr) {
+        List<MindMapNode> nodes = new ArrayList<>();
+        if (arr == null) return nodes;
+        for (int i = 0; i < arr.length(); i++) {
+            JSONObject obj = arr.optJSONObject(i);
+            if (obj == null) continue;
+            nodes.add(new MindMapNode(
+                    obj.optString("title", ""),
+                    obj.optString("summary", ""),
+                    obj.optString("badge", ""),
+                    jsonStringList(obj.optJSONArray("points"))));
+        }
+        return nodes;
+    }
+
+    private List<MemoryCard> chapterCardsWithoutOverview(String chapter) {
+        List<MemoryCard> cards = new ArrayList<>();
+        for (MemoryCard card : allMemoryCards) {
+            if (chapter.equals(card.chapter) && !card.overviewCard) {
+                cards.add(card);
+            }
+        }
+        return cards;
     }
 
     private List<String> jsonStringList(JSONArray arr) {
@@ -790,15 +977,20 @@ public class MainActivity extends Activity {
         if (!cardMode) {
             return handleQuestionPageSwipe(event);
         }
+        return handleCardNavigationTouch(target, event, true);
+    }
+
+    private boolean handleCardNavigationTouch(View target, MotionEvent event, boolean allowTapFlip) {
+        if (!cardMode) {
+            return handleQuestionPageSwipe(event);
+        }
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
             swipeStartX = event.getX();
             swipeStartY = event.getY();
-            if (cardMode) {
-                feedbackContainer.animate().cancel();
-            }
+            feedbackContainer.animate().cancel();
             return false;
         }
-        if (event.getAction() == MotionEvent.ACTION_MOVE && cardMode) {
+        if (event.getAction() == MotionEvent.ACTION_MOVE) {
             float dx = event.getX() - swipeStartX;
             float dy = event.getY() - swipeStartY;
             if (Math.abs(dx) > dp(16) && Math.abs(dx) > Math.abs(dy) * 1.2f) {
@@ -811,14 +1003,12 @@ public class MainActivity extends Activity {
         if (event.getAction() == MotionEvent.ACTION_UP) {
             float dx = event.getX() - swipeStartX;
             float dy = event.getY() - swipeStartY;
-            if (cardMode && Math.abs(dx) < dp(12) && Math.abs(dy) < dp(12)) {
+            if (allowTapFlip && Math.abs(dx) < dp(12) && Math.abs(dy) < dp(12)) {
                 flipCurrentCard();
                 return true;
             }
             if (Math.abs(dx) > dp(90) && Math.abs(dx) > Math.abs(dy) * 1.5f) {
-                if (cardMode) {
-                    lastCardSwipeAtMillis = System.currentTimeMillis();
-                }
+                lastCardSwipeAtMillis = System.currentTimeMillis();
                 if (dx < 0) {
                     move(1);
                 } else {
@@ -826,11 +1016,9 @@ public class MainActivity extends Activity {
                 }
                 return true;
             }
-            if (cardMode) {
-                settleCardDrag();
-            }
+            settleCardDrag();
         }
-        if (event.getAction() == MotionEvent.ACTION_CANCEL && cardMode) {
+        if (event.getAction() == MotionEvent.ACTION_CANCEL) {
             settleCardDrag();
         }
         return false;
@@ -1499,12 +1687,21 @@ public class MainActivity extends Activity {
         if (currentCardIndex < 0) currentCardIndex = 0;
         if (currentCardIndex >= visibleCards.size()) currentCardIndex = visibleCards.size() - 1;
         MemoryCard card = visibleCards.get(currentCardIndex);
+        final boolean allowTapFlip = !(cardBackVisible && card.hasMindMap());
         if (filterRowView != null) filterRowView.setVisibility(View.VISIBLE);
         stemView.setVisibility(View.GONE);
+        String cardActionHint;
+        if (cardBackVisible && card.hasMindMap()) {
+            cardActionHint = "点分支展开，左右滑动换卡";
+        } else if (!cardBackVisible && card.hasMindMap()) {
+            cardActionHint = "点按翻到导图，左右滑动换卡";
+        } else {
+            cardActionHint = "点按翻面，左右滑动换卡";
+        }
         metaView.setText((currentCardIndex + 1) + "/" + visibleCards.size()
                 + "  ·  " + card.chapter
                 + "  ·  " + (cardBackVisible ? "背面" : "正面")
-                + "  ·  点按翻面，左右滑动换卡");
+                + "  ·  " + cardActionHint);
         feedbackContainer.setPadding(dp(2), dp(8), dp(2), dp(16));
         feedbackContainer.setTranslationX(0f);
         feedbackContainer.setAlpha(1f);
@@ -1514,7 +1711,7 @@ public class MainActivity extends Activity {
         feedbackContainer.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
-                return handleSwipeNavigationTouch(v, event);
+                return handleCardNavigationTouch(v, event, allowTapFlip);
             }
         });
         renderMemoryCard(feedbackContainer, card, cardBackVisible);
@@ -1783,17 +1980,35 @@ public class MainActivity extends Activity {
         cardBox.setBackground(roundedStrokeBackground(surface, GLASS_STROKE, 28, 1));
         cardBox.setElevation(dp(4));
         cardBox.setClickable(true);
+        final boolean allowTapFlip = !(backVisible && card.hasMindMap());
         cardBox.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
-                return handleSwipeNavigationTouch(v, event);
+                return handleCardNavigationTouch(v, event, allowTapFlip);
             }
         });
 
-        addCardKicker(cardBox, backVisible ? "背面 · 对答案" : "正面 · 先回忆", accent);
+        String kickerText;
+        if (card.hasMindMap()) {
+            kickerText = backVisible
+                    ? "背面 · 导图与暗号"
+                    : (card.overviewCard ? "正面 · 章节总览" : "正面 · 知识总览");
+        } else {
+            kickerText = backVisible ? "背面 · 知识拓展" : "正面 · 先回忆";
+        }
+        addCardKicker(cardBox, kickerText, accent);
         addCardTitle(cardBox, card.knowledge);
         addCardSubhead(cardBox, card.chapter + "  ·  覆盖 " + card.questionCount + " 题");
         addCardDivider(cardBox);
+
+        if (card.usesRichNotebookCard()) {
+            renderNotebookMemoryCard(cardBox, card, backVisible, section);
+            LinearLayout.LayoutParams richLp = new LinearLayout.LayoutParams(-1, -2);
+            richLp.topMargin = dp(2);
+            richLp.bottomMargin = dp(8);
+            container.addView(cardBox, richLp);
+            return;
+        }
 
         if (backVisible) {
             addCardSection(cardBox, "一句话定位", card.layerHint, HIGHLIGHT, true);
@@ -1819,6 +2034,55 @@ public class MainActivity extends Activity {
         lp.topMargin = dp(2);
         lp.bottomMargin = dp(8);
         container.addView(cardBox, lp);
+    }
+
+    private void renderNotebookMemoryCard(LinearLayout cardBox, MemoryCard card, boolean backVisible, int sectionColor) {
+        String markdown = backVisible ? card.backMarkdown : card.frontMarkdown;
+        if (backVisible && card.hasMindMap()) {
+            addMindMapSection(cardBox, card);
+            addNotebookMarkdownShell(cardBox, markdown, sectionColor, dp(10));
+            TextView backButton = text("返回总览", 13, BLUE, true);
+            backButton.setGravity(Gravity.CENTER);
+            backButton.setPadding(dp(12), dp(7), dp(12), dp(7));
+            backButton.setBackground(roundedBackground(Color.argb(34, Color.red(BLUE), Color.green(BLUE), Color.blue(BLUE)), 999));
+            backButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    flipCurrentCard();
+                }
+            });
+            LinearLayout.LayoutParams backLp = new LinearLayout.LayoutParams(-2, -2);
+            backLp.topMargin = dp(10);
+            cardBox.addView(backButton, backLp);
+            addCardHint(cardBox, "点分支展开细节 · 左右滑动换卡");
+            addCardBottomSpacer(cardBox, 88);
+        } else if (backVisible) {
+            addNotebookMarkdownShell(cardBox, markdown, sectionColor, dp(4));
+            addCardHint(cardBox, "点按回到正面 · 左右滑动换知识点");
+        } else if (card.hasMindMap()) {
+            addNotebookMarkdownShell(cardBox, markdown, sectionColor, dp(4));
+            addCardHint(cardBox, "点按翻到导图 · 左右滑动换知识点");
+        } else {
+            addNotebookMarkdownShell(cardBox, markdown, sectionColor, dp(4));
+            addCardHint(cardBox, "点按翻到背面 · 左右滑动换知识点");
+        }
+    }
+
+    private void addNotebookMarkdownShell(LinearLayout parent, String markdown, int sectionColor, int topMargin) {
+        if (markdown == null || markdown.trim().length() == 0) return;
+        LinearLayout proseShell = new LinearLayout(this);
+        proseShell.setOrientation(LinearLayout.VERTICAL);
+        proseShell.setPadding(dp(14), dp(10), dp(14), dp(12));
+        proseShell.setBackground(roundedBackground(sectionColor, 20));
+        renderMarkdown(proseShell, markdown);
+        LinearLayout.LayoutParams proseLp = new LinearLayout.LayoutParams(-1, -2);
+        proseLp.topMargin = topMargin;
+        parent.addView(proseShell, proseLp);
+    }
+
+    private void addCardBottomSpacer(LinearLayout parent, int heightDp) {
+        View spacer = new View(this);
+        parent.addView(spacer, new LinearLayout.LayoutParams(-1, dp(heightDp)));
     }
 
     private void addCardKicker(LinearLayout parent, String value, int color) {
@@ -1903,6 +2167,197 @@ public class MainActivity extends Activity {
         tv.setGravity(Gravity.CENTER);
         tv.setPadding(0, dp(12), 0, 0);
         parent.addView(tv, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    private void addMindMapSection(LinearLayout parent, MemoryCard card) {
+        if (!card.hasMindMap()) return;
+
+        TextView titleView = text(card.mindMapTitle.length() == 0 ? "章节导图" : card.mindMapTitle, 15, BLUE, true);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(-1, -2);
+        titleLp.topMargin = dp(12);
+        parent.addView(titleView, titleLp);
+
+        final LinearLayout mapStage = new LinearLayout(this);
+        mapStage.setOrientation(LinearLayout.VERTICAL);
+        mapStage.setPadding(dp(14), dp(14), dp(14), dp(14));
+        mapStage.setBackground(roundedBackground(CARD_SECTION, 20));
+
+        TextView guide = text("点开任一分支，直接看这一组题围绕什么中心词、高频口径和易错点。", 13, MUTED, false);
+        guide.setLineSpacing(dp(3), 1.0f);
+        mapStage.addView(guide, new LinearLayout.LayoutParams(-1, -2));
+
+        LinearLayout hubWrap = new LinearLayout(this);
+        hubWrap.setGravity(Gravity.CENTER_HORIZONTAL);
+        LinearLayout.LayoutParams hubWrapLp = new LinearLayout.LayoutParams(-1, -2);
+        hubWrapLp.topMargin = dp(12);
+        mapStage.addView(hubWrap, hubWrapLp);
+
+        final TextView hub = text(card.mindMapTitle, 18, TEXT, true);
+        hub.setGravity(Gravity.CENTER);
+        hub.setPadding(dp(18), dp(18), dp(18), dp(18));
+        hub.setBackground(roundedBackground(Color.argb(255, 214, 221, 255), 18));
+        hub.setMaxWidth(dp(280));
+        hubWrap.addView(hub, new LinearLayout.LayoutParams(-2, -2));
+
+        View stem = new View(this);
+        stem.setBackgroundColor(GLASS_STROKE);
+        LinearLayout.LayoutParams stemLp = new LinearLayout.LayoutParams(dp(2), dp(20));
+        stemLp.gravity = Gravity.CENTER_HORIZONTAL;
+        stemLp.topMargin = dp(8);
+        mapStage.addView(stem, stemLp);
+
+        final LinearLayout branchColumn = new LinearLayout(this);
+        branchColumn.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams branchLp = new LinearLayout.LayoutParams(-1, -2);
+        branchLp.topMargin = dp(4);
+        mapStage.addView(branchColumn, branchLp);
+
+        final List<LinearLayout> branchHeaders = new ArrayList<>();
+        final List<View> branchBodies = new ArrayList<>();
+        final List<TextView> branchToggles = new ArrayList<>();
+        final List<Integer> branchColors = new ArrayList<>();
+        for (int i = 0; i < card.mindMapNodes.size(); i++) {
+            final MindMapNode node = card.mindMapNodes.get(i);
+            final int accent = mindMapAccentColor(i);
+            final LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.TOP);
+            LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(-1, -2);
+            if (i > 0) rowLp.topMargin = dp(14);
+            branchColumn.addView(row, rowLp);
+
+            FrameLayout rail = new FrameLayout(this);
+            LinearLayout.LayoutParams railLp = new LinearLayout.LayoutParams(dp(24), -2);
+            railLp.rightMargin = dp(10);
+            row.addView(rail, railLp);
+
+            View dot = new View(this);
+            dot.setBackground(roundedBackground(accent, 999));
+            FrameLayout.LayoutParams dotLp = new FrameLayout.LayoutParams(dp(10), dp(10));
+            dotLp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+            dotLp.topMargin = dp(8);
+            rail.addView(dot, dotLp);
+
+            View line = new View(this);
+            line.setBackgroundColor(Color.argb(108, Color.red(accent), Color.green(accent), Color.blue(accent)));
+            FrameLayout.LayoutParams lineLp = new FrameLayout.LayoutParams(dp(2), i == card.mindMapNodes.size() - 1 ? dp(36) : dp(92));
+            lineLp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+            lineLp.topMargin = dp(14);
+            rail.addView(line, lineLp);
+
+            final LinearLayout item = new LinearLayout(this);
+            item.setOrientation(LinearLayout.VERTICAL);
+            row.addView(item, new LinearLayout.LayoutParams(0, -2, 1f));
+
+            final LinearLayout header = new LinearLayout(this);
+            header.setOrientation(LinearLayout.HORIZONTAL);
+            header.setGravity(Gravity.CENTER_VERTICAL);
+            header.setPadding(dp(16), dp(14), dp(16), dp(14));
+            header.setBackground(roundedBackground(Color.argb(255, 243, 247, 255), 18));
+            item.addView(header, new LinearLayout.LayoutParams(-1, -2));
+
+            LinearLayout textColumn = new LinearLayout(this);
+            textColumn.setOrientation(LinearLayout.VERTICAL);
+            header.addView(textColumn, new LinearLayout.LayoutParams(0, -2, 1));
+
+            TextView nodeTitle = text(node.title, 17, Color.rgb(29, 40, 66), true);
+            nodeTitle.setLineSpacing(dp(3), 1.0f);
+            textColumn.addView(nodeTitle, new LinearLayout.LayoutParams(-1, -2));
+
+            if (node.badge.length() > 0) {
+                TextView badge = text(node.badge, 12, Color.rgb(78, 94, 126), true);
+                badge.setPadding(dp(10), dp(5), dp(10), dp(5));
+                badge.setBackground(roundedBackground(Color.argb(48, Color.red(accent), Color.green(accent), Color.blue(accent)), 999));
+                LinearLayout.LayoutParams badgeLp = new LinearLayout.LayoutParams(-2, -2);
+                badgeLp.topMargin = dp(4);
+                textColumn.addView(badge, badgeLp);
+            }
+
+            final TextView toggle = text(i == 0 ? "收起" : "展开", 12, BLUE, true);
+            toggle.setGravity(Gravity.CENTER);
+            toggle.setPadding(dp(10), dp(6), dp(10), dp(6));
+            header.addView(toggle, new LinearLayout.LayoutParams(-2, -2));
+
+            final LinearLayout body = new LinearLayout(this);
+            body.setOrientation(LinearLayout.VERTICAL);
+            body.setPadding(dp(14), dp(12), dp(14), dp(12));
+            body.setBackground(roundedBackground(Color.argb(180, 255, 255, 255), 16));
+            body.setVisibility(i == 0 ? View.VISIBLE : View.GONE);
+            LinearLayout.LayoutParams bodyLp = new LinearLayout.LayoutParams(-1, -2);
+            bodyLp.topMargin = dp(8);
+            item.addView(body, bodyLp);
+
+            if (node.summary.length() > 0) {
+                TextView summary = text(node.summary, 14, TEXT, true);
+                summary.setLineSpacing(dp(3), 1.0f);
+                body.addView(summary, new LinearLayout.LayoutParams(-1, -2));
+            }
+            for (String point : node.points) {
+                TextView bullet = text("• " + point, 14, TEXT, false);
+                bullet.setLineSpacing(dp(3), 1.0f);
+                LinearLayout.LayoutParams bulletLp = new LinearLayout.LayoutParams(-1, -2);
+                bulletLp.topMargin = dp(6);
+                body.addView(bullet, bulletLp);
+            }
+
+            branchHeaders.add(header);
+            branchBodies.add(body);
+            branchToggles.add(toggle);
+            branchColors.add(accent);
+            header.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    for (int j = 0; j < branchBodies.size(); j++) {
+                        View candidate = branchBodies.get(j);
+                        LinearLayout candidateHeader = branchHeaders.get(j);
+                        TextView candidateToggle = branchToggles.get(j);
+                        int candidateAccent = branchColors.get(j);
+                        boolean expand = candidate == body && candidate.getVisibility() != View.VISIBLE;
+                        candidate.setVisibility(expand ? View.VISIBLE : View.GONE);
+                        applyMindMapBranchState(candidateHeader, candidateToggle, candidateAccent, expand);
+                    }
+                }
+            });
+        }
+
+        LinearLayout.LayoutParams stageLp = new LinearLayout.LayoutParams(-1, -2);
+        stageLp.topMargin = dp(8);
+        parent.addView(mapStage, stageLp);
+        for (int i = 0; i < branchHeaders.size(); i++) {
+            applyMindMapBranchState(branchHeaders.get(i), branchToggles.get(i), branchColors.get(i), i == 0);
+        }
+    }
+
+    private void applyMindMapBranchState(LinearLayout header, TextView toggle, int accentColor, boolean expanded) {
+        header.setAlpha(expanded ? 1f : 0.96f);
+        header.setBackground(roundedBackground(
+                Color.argb(expanded ? 88 : 42, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor)),
+                18));
+        toggle.setText(expanded ? "收起" : "展开");
+        toggle.setTextColor(expanded ? TEXT : BLUE);
+        toggle.setBackground(roundedBackground(
+                Color.argb(expanded ? 92 : 44, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor)),
+                999));
+    }
+
+    private int mindMapAccentColor(int index) {
+        int[] palette = new int[] {
+                Color.rgb(133, 164, 255),
+                Color.rgb(118, 186, 169),
+                Color.rgb(255, 170, 112),
+                Color.rgb(193, 149, 255),
+                Color.rgb(255, 140, 173)
+        };
+        return palette[Math.abs(index) % palette.length];
+    }
+
+    private void syncMindMapConnectors(FrameLayout mapCanvas, View hub, List<View> headers, MindMapConnectorView connectorView) {
+        RectF hubRect = new RectF(hub.getLeft(), hub.getTop(), hub.getRight(), hub.getBottom());
+        List<RectF> targets = new ArrayList<>();
+        for (View header : headers) {
+            targets.add(new RectF(header.getLeft(), header.getTop(), header.getRight(), header.getBottom()));
+        }
+        connectorView.setGraph(hubRect, targets);
     }
 
     private List<String> defaultCardBullets() {
@@ -3049,7 +3504,9 @@ public class MainActivity extends Activity {
                 List<MemoryCard> cards = memoryCardsInChapter(chapter);
                 int questionCount = 0;
                 for (MemoryCard card : cards) {
-                    questionCount += card.questionCount;
+                    if (!card.overviewCard) {
+                        questionCount += card.questionCount;
+                    }
                 }
                 sb.append("- ").append(chapter).append("：").append(questionCount)
                         .append(" 题，").append(cards.size()).append(" 张卡片\n");
@@ -3082,7 +3539,11 @@ public class MainActivity extends Activity {
         if (!allMemoryCards.isEmpty()) {
             List<MemoryCard> cards = new ArrayList<>();
             for (MemoryCard card : allMemoryCards) {
-                if (chapter == null || chapter.equals(card.chapter)) {
+                if (chapter == null) {
+                    if (!card.overviewCard) {
+                        cards.add(card);
+                    }
+                } else if (chapter.equals(card.chapter)) {
                     cards.add(card);
                 }
             }
@@ -3169,7 +3630,9 @@ public class MainActivity extends Activity {
         StringBuilder sb = new StringBuilder();
         int questionCount = 0;
         for (MemoryCard card : cards) {
-            questionCount += card.questionCount;
+            if (!card.overviewCard) {
+                questionCount += card.questionCount;
+            }
         }
         sb.append("# ").append(chapter).append(" 记忆卡片\n\n");
         sb.append("- 覆盖题目：").append(questionCount).append(" 题\n");
@@ -5421,6 +5884,9 @@ public class MainActivity extends Activity {
         final List<String> questionTips;
         final String frontMarkdown;
         final String backMarkdown;
+        final boolean overviewCard;
+        final String mindMapTitle;
+        final List<MindMapNode> mindMapNodes;
 
         MemoryCard(String chapter, String knowledge, int questionCount, String labels,
                    String layerHint, String chapterMap, String typeDistribution,
@@ -5428,6 +5894,18 @@ public class MainActivity extends Activity {
                    List<String> corePoints, List<String> mustRemember,
                    List<String> traps, List<String> questionTips,
                    String frontMarkdown, String backMarkdown) {
+            this(chapter, knowledge, questionCount, labels, layerHint, chapterMap, typeDistribution,
+                    eyeLines, selfChecks, corePoints, mustRemember, traps, questionTips,
+                    frontMarkdown, backMarkdown, false, "", new ArrayList<MindMapNode>());
+        }
+
+        MemoryCard(String chapter, String knowledge, int questionCount, String labels,
+                   String layerHint, String chapterMap, String typeDistribution,
+                   List<String> eyeLines, List<String> selfChecks,
+                   List<String> corePoints, List<String> mustRemember,
+                   List<String> traps, List<String> questionTips,
+                   String frontMarkdown, String backMarkdown,
+                   boolean overviewCard, String mindMapTitle, List<MindMapNode> mindMapNodes) {
             this.chapter = chapter;
             this.knowledge = knowledge;
             this.questionCount = questionCount;
@@ -5444,6 +5922,69 @@ public class MainActivity extends Activity {
             this.questionTips = new ArrayList<>(questionTips);
             this.frontMarkdown = frontMarkdown;
             this.backMarkdown = backMarkdown;
+            this.overviewCard = overviewCard;
+            this.mindMapTitle = mindMapTitle == null ? "" : mindMapTitle;
+            this.mindMapNodes = mindMapNodes == null ? new ArrayList<MindMapNode>() : new ArrayList<>(mindMapNodes);
+        }
+
+        boolean usesRichNotebookCard() {
+            return (frontMarkdown != null && frontMarkdown.trim().length() > 0)
+                    || (backMarkdown != null && backMarkdown.trim().length() > 0)
+                    || hasMindMap();
+        }
+
+        boolean hasMindMap() {
+            return mindMapNodes != null && !mindMapNodes.isEmpty();
+        }
+    }
+
+    private static class MindMapNode {
+        final String title;
+        final String summary;
+        final String badge;
+        final List<String> points;
+
+        MindMapNode(String title, String summary, String badge, List<String> points) {
+            this.title = title == null ? "" : title;
+            this.summary = summary == null ? "" : summary;
+            this.badge = badge == null ? "" : badge;
+            this.points = points == null ? new ArrayList<String>() : new ArrayList<>(points);
+        }
+    }
+
+    private static class MindMapConnectorView extends View {
+        private final Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private RectF hubRect = null;
+        private List<RectF> targetRects = new ArrayList<>();
+
+        MindMapConnectorView(Context context, int color) {
+            super(context);
+            linePaint.setStyle(Paint.Style.STROKE);
+            linePaint.setStrokeWidth(4f);
+            linePaint.setColor(color);
+        }
+
+        void setGraph(RectF hubRect, List<RectF> targetRects) {
+            this.hubRect = hubRect;
+            this.targetRects = targetRects == null ? new ArrayList<RectF>() : targetRects;
+            invalidate();
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            if (hubRect == null || targetRects.isEmpty()) return;
+            float startX = hubRect.right;
+            float startY = hubRect.centerY();
+            for (RectF rect : targetRects) {
+                float endX = rect.left;
+                float endY = rect.centerY();
+                Path path = new Path();
+                path.moveTo(startX, startY);
+                float dx = Math.max(40f, (endX - startX) * 0.45f);
+                path.cubicTo(startX + dx, startY, endX - dx, endY, endX, endY);
+                canvas.drawPath(path, linePaint);
+            }
         }
     }
 }
