@@ -3613,7 +3613,8 @@ public class MainActivity extends Activity {
     private boolean isReasonHighlightLine(String line) {
         String compact = line.replace(" ", "").replace(':', '：');
         String[] labels = new String[] {
-                "理由：", "底层理由：", "做题理由：", "判题理由：", "判断理由：",
+                "理由：", "本题理由：", "直接理由：", "核心理由：", "底层理由：",
+                "做题理由：", "判题理由：", "判断理由：",
                 "选择理由：", "关键理由：", "为什么选它：", "为什么这样判题：",
                 "原因：", "依据：", "本题判断：", "本题答案：", "本题填：",
                 "题眼：", "判断：", "答案：", "关键：", "错点：", "易错："
@@ -3629,7 +3630,8 @@ public class MainActivity extends Activity {
     private boolean isStandaloneReasonHighlightLine(String line) {
         String compact = line == null ? "" : line.replace(" ", "").replace(':', '：');
         String[] labels = new String[] {
-                "理由：", "底层理由：", "做题理由：", "判题理由：", "判断理由：",
+                "理由：", "本题理由：", "直接理由：", "核心理由：", "底层理由：",
+                "做题理由：", "判题理由：", "判断理由：",
                 "选择理由：", "关键理由：", "为什么选它：", "为什么这样判题：",
                 "原因：", "依据：", "本题判断：", "本题答案：", "本题填：",
                 "题眼：", "判断：", "答案：", "关键：", "错点：", "易错："
