@@ -3,16 +3,16 @@
   "versionCode": 60,
   "versionName": "2.10.35",
   "apkFileName": "review-baodian.apk",
-  "apkDownloadUrl": "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
+  "apkDownloadUrl": "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.35/review-baodian.apk",
   "apkDownloadCandidates": [
-    "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
-    "https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
     "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.35/review-baodian.apk",
-    "https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.35/review-baodian.apk"
+    "https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.35/review-baodian.apk",
+    "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
+    "https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk"
   ],
-  "releaseHtmlUrl": "https://github.com/ZhiKong0/review-baodian-apk/releases/latest",
+  "releaseHtmlUrl": "https://github.com/ZhiKong0/review-baodian-apk/releases/tag/v2.10.35",
   "releaseNotes": "# v2.10.35\n\n- 题目页新增半透明侧边悬浮导出箭头，点按即可复制当前题目提示词并打开系统分享面板。\n- 悬浮导出箭头支持拖动移动位置，并会记住上次位置；拖动时不会误触题目左右翻页。\n- 设置页新增“题目导出提示词”配置入口，可自定义导出给其他 AI 的提示词模板。\n- 模拟器已验证：题目页可点按分享、设置页不显示悬浮箭头、拖动后重启仍保持新位置。",
   "apkSize": 1096245,
-  "sha256": "e76e170f59f9e861f3369be7d833b76ef50bdc2f62d5789b799b7d99742ab5a7",
-  "generatedAt": "2026-06-27T05:25:23.337124+00:00"
+  "sha256": "e3a73619d589eac6f1a0a716d6b03c197dd448f2aba93ebc24f2e825f13f6088",
+  "generatedAt": "2026-06-27T05:26:42.700399+00:00"
 }
