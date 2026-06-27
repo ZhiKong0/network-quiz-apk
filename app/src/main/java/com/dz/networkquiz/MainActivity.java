@@ -159,6 +159,7 @@ public class MainActivity extends Activity {
     private TextView swipePreviewTitle;
     private TextView swipePreviewBody;
     private LinearLayout headerContainer;
+    private View homeButton;
     private TextView titleView;
     private TextView metaView;
     private TextView progressPeekView;
@@ -168,6 +169,7 @@ public class MainActivity extends Activity {
     private TextView exportPromptLineView;
     private TextView floatingExportButton;
     private SeekBar questionSeekBar;
+    private FrameLayout questionSeekShell;
     private TextView stemView;
     private LinearLayout memoryReasonContainer;
     private LinearLayout feedbackContainer;
@@ -176,11 +178,9 @@ public class MainActivity extends Activity {
     private Button chapterFilterButton;
     private Button actionButton;
     private LinearLayout bottomNavBar;
-    private TextView rememberNavButton;
-    private TextView quizNavButton;
-    private TextView wrongNavButton;
-    private TextView cardsNavButton;
+    private TextView coursesNavButton;
     private TextView settingsNavButton;
+    private TextView suggestionsNavButton;
     private Spinner typeSpinner;
     private Spinner chapterSpinner;
     private Button submitButton;
@@ -201,6 +201,8 @@ public class MainActivity extends Activity {
     private Boolean lastAnswerOk = null;
     private boolean cardMode = false;
     private boolean settingsMode = false;
+    private boolean homeMode = true;
+    private boolean suggestionsMode = false;
     private String currentCardChapter = null;
     private String typeFilter = ALL_TYPES;
     private String chapterFilter = ALL_CHAPTERS;
@@ -289,7 +291,7 @@ public class MainActivity extends Activity {
         restoreStudyFilters();
         buildLayout();
         applySystemBars();
-        showRestoredStudyMode();
+        showCoursesHome();
         scheduleAutoUpdateCheck();
     }
 
@@ -368,6 +370,8 @@ public class MainActivity extends Activity {
         return !suppressQuestionPageSwipe
                 && !mindMapGestureActive
                 && !floatingExportGestureActive
+                && !homeMode
+                && !suggestionsMode
                 && !cardMode
                 && !settingsMode;
     }
@@ -1227,6 +1231,21 @@ public class MainActivity extends Activity {
         titleRow.setMinimumHeight(dp(30));
         infoCard.addView(titleRow, new LinearLayout.LayoutParams(-1, -2));
 
+        homeButton = new HomeIconButton(this);
+        homeButton.setContentDescription("返回首页");
+        homeButton.setBackground(homeButtonBackground());
+        homeButton.setVisibility(View.GONE);
+        homeButton.setClickable(true);
+        homeButton.setFocusable(true);
+        installPressFeedback(homeButton);
+        homeButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showCoursesHome();
+            }
+        });
+        titleRow.addView(homeButton, new FrameLayout.LayoutParams(dp(44), dp(44), Gravity.START | Gravity.CENTER_VERTICAL));
+
         titleView = text("", 17, BLUE, true);
         titleView.setIncludeFontPadding(false);
         titleView.setSingleLine(true);
@@ -1308,13 +1327,13 @@ public class MainActivity extends Activity {
                 }
             }
         });
-        FrameLayout seekShell = new FrameLayout(this);
-        seekShell.setPadding(dp(10), dp(2), dp(10), dp(2));
-        seekShell.setBackground(headerSeekShellBackground());
+        questionSeekShell = new FrameLayout(this);
+        questionSeekShell.setPadding(dp(10), dp(2), dp(10), dp(2));
+        questionSeekShell.setBackground(headerSeekShellBackground());
         LinearLayout.LayoutParams seekShellLp = new LinearLayout.LayoutParams(-1, dp(28));
         seekShellLp.topMargin = dp(6);
-        infoCard.addView(seekShell, seekShellLp);
-        seekShell.addView(questionSeekBar, new FrameLayout.LayoutParams(-1, dp(22), Gravity.CENTER));
+        infoCard.addView(questionSeekShell, seekShellLp);
+        questionSeekShell.addView(questionSeekBar, new FrameLayout.LayoutParams(-1, dp(22), Gravity.CENTER));
 
         buildFilterControls(headerContainer);
 
@@ -1490,7 +1509,11 @@ public class MainActivity extends Activity {
         if (floatingExportButton == null) return;
         floatingExportButton.setBackground(floatingExportBackground());
         floatingExportButton.setTextColor(THEME_LIGHT.equals(themeMode) ? BLUE : Color.WHITE);
-        boolean show = !cardMode && !settingsMode && !visibleQuestions.isEmpty();
+        boolean show = !homeMode
+                && !suggestionsMode
+                && !cardMode
+                && !settingsMode
+                && !visibleQuestions.isEmpty();
         floatingExportButton.setVisibility(show ? View.VISIBLE : View.GONE);
         if (!show) return;
         floatingExportButton.bringToFront();
@@ -1577,6 +1600,8 @@ public class MainActivity extends Activity {
     }
 
     private void showAllMode() {
+        homeMode = false;
+        suggestionsMode = false;
         rememberMode = false;
         cardMode = false;
         wrongMode = false;
@@ -1587,6 +1612,8 @@ public class MainActivity extends Activity {
     }
 
     private void showRememberMode() {
+        homeMode = false;
+        suggestionsMode = false;
         rememberMode = true;
         cardMode = false;
         wrongMode = false;
@@ -1597,6 +1624,8 @@ public class MainActivity extends Activity {
     }
 
     private void showWrongMode() {
+        homeMode = false;
+        suggestionsMode = false;
         rememberMode = false;
         cardMode = false;
         wrongMode = true;
@@ -1607,9 +1636,31 @@ public class MainActivity extends Activity {
     }
 
     private void showSettingsMode() {
+        homeMode = false;
+        suggestionsMode = false;
         settingsMode = true;
         rememberMode = false;
         cardMode = false;
+        wrongMode = false;
+        renderQuestion();
+    }
+
+    private void showCoursesHome() {
+        homeMode = true;
+        suggestionsMode = false;
+        settingsMode = false;
+        cardMode = false;
+        rememberMode = false;
+        wrongMode = false;
+        renderQuestion();
+    }
+
+    private void showSuggestionsMode() {
+        homeMode = false;
+        suggestionsMode = true;
+        settingsMode = false;
+        cardMode = false;
+        rememberMode = false;
         wrongMode = false;
         renderQuestion();
     }
@@ -1633,7 +1684,7 @@ public class MainActivity extends Activity {
 
     private void applyFilters() {
         if (!filterReady) return;
-        if (cardMode || settingsMode) return;
+        if (homeMode || suggestionsMode || cardMode || settingsMode) return;
         rebuildVisibleQuestions();
         currentIndex = restoredQuestionIndexForActiveGroup();
         renderQuestion();
@@ -1681,7 +1732,7 @@ public class MainActivity extends Activity {
     }
 
     private void persistStudyProgress(String label) {
-        if (prefs == null || cardMode || settingsMode) return;
+        if (prefs == null || homeMode || suggestionsMode || cardMode || settingsMode) return;
         String mode = currentStudyModeValue();
         SharedPreferences.Editor editor = prefs.edit()
                 .putString(PREF_LAST_STUDY_MODE, mode)
@@ -1716,7 +1767,7 @@ public class MainActivity extends Activity {
         if (mindMapGestureActive) {
             return false;
         }
-        if (settingsMode) {
+        if (homeMode || suggestionsMode || settingsMode) {
             return false;
         }
         if (!cardMode) {
@@ -1970,28 +2021,10 @@ public class MainActivity extends Activity {
         bar.setBackground(navBarBackground());
         bar.setElevation(dp(18));
 
-        rememberNavButton = navButton("记题", new View.OnClickListener() {
+        coursesNavButton = navButton("课程", new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                showRememberMode();
-            }
-        });
-        quizNavButton = navButton("刷题", new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                showAllMode();
-            }
-        });
-        wrongNavButton = navButton("错题", new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                showWrongMode();
-            }
-        });
-        cardsNavButton = navButton("导图", new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                showCardMode(currentCardChapter);
+                showCoursesHome();
             }
         });
         settingsNavButton = navButton("设置", new View.OnClickListener() {
@@ -2000,20 +2033,20 @@ public class MainActivity extends Activity {
                 showSettingsMode();
             }
         });
+        suggestionsNavButton = navButton("建议", new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showSuggestionsMode();
+            }
+        });
 
-        bar.addView(navSlot(rememberNavButton), new LinearLayout.LayoutParams(0, dp(44), 1));
-        LinearLayout.LayoutParams quizLp = new LinearLayout.LayoutParams(0, dp(44), 1);
-        quizLp.leftMargin = dp(4);
-        bar.addView(navSlot(quizNavButton), quizLp);
-        LinearLayout.LayoutParams wrongLp = new LinearLayout.LayoutParams(0, dp(44), 1);
-        wrongLp.leftMargin = dp(4);
-        bar.addView(navSlot(wrongNavButton), wrongLp);
-        LinearLayout.LayoutParams cardsLp = new LinearLayout.LayoutParams(0, dp(44), 1);
-        cardsLp.leftMargin = dp(4);
-        bar.addView(navSlot(cardsNavButton), cardsLp);
+        bar.addView(navSlot(coursesNavButton), new LinearLayout.LayoutParams(0, dp(44), 1));
         LinearLayout.LayoutParams settingsLp = new LinearLayout.LayoutParams(0, dp(44), 1);
-        settingsLp.leftMargin = dp(4);
+        settingsLp.leftMargin = dp(8);
         bar.addView(navSlot(settingsNavButton), settingsLp);
+        LinearLayout.LayoutParams suggestionsLp = new LinearLayout.LayoutParams(0, dp(44), 1);
+        suggestionsLp.leftMargin = dp(8);
+        bar.addView(navSlot(suggestionsNavButton), suggestionsLp);
         return bar;
     }
 
@@ -2037,12 +2070,10 @@ public class MainActivity extends Activity {
     }
 
     private void updateBottomNav() {
-        if (quizNavButton == null) return;
-        styleNavButton(rememberNavButton, rememberMode);
-        styleNavButton(quizNavButton, !rememberMode && !wrongMode && !cardMode && !settingsMode);
-        styleNavButton(wrongNavButton, wrongMode);
-        styleNavButton(cardsNavButton, cardMode);
+        if (coursesNavButton == null) return;
+        styleNavButton(coursesNavButton, homeMode || (!settingsMode && !suggestionsMode));
         styleNavButton(settingsNavButton, settingsMode);
+        styleNavButton(suggestionsNavButton, suggestionsMode);
     }
 
     private void styleNavButton(TextView view, boolean active) {
@@ -2055,19 +2086,43 @@ public class MainActivity extends Activity {
     private void refreshChrome() {
         if (titleView == null || metaView == null) return;
         updateBottomNav();
+        if (homeMode) {
+            setHeaderHomeVisible(false);
+            applyHeaderTitleStyle("备考宝典", BLUE);
+            clearHeaderTitleAction();
+            metaView.setVisibility(View.GONE);
+            setQuestionSeekVisible(false);
+            progressPeekView.setVisibility(View.GONE);
+            if (filterRowView != null) filterRowView.setVisibility(View.GONE);
+            return;
+        }
+
+        setHeaderHomeVisible(true);
+        if (suggestionsMode) {
+            applyHeaderTitleStyle("建议", AMBER);
+            clearHeaderTitleAction();
+            metaView.setVisibility(View.GONE);
+            setQuestionSeekVisible(false);
+            progressPeekView.setVisibility(View.GONE);
+            if (filterRowView != null) filterRowView.setVisibility(View.GONE);
+            return;
+        }
+
         if (settingsMode) {
             applyHeaderTitleStyle("设置", GREEN);
+            clearHeaderTitleAction();
             metaView.setVisibility(View.GONE);
-            questionSeekBar.setVisibility(View.GONE);
+            setQuestionSeekVisible(false);
             progressPeekView.setVisibility(View.GONE);
             if (filterRowView != null) filterRowView.setVisibility(View.GONE);
             return;
         }
 
         if (cardMode) {
-            applyHeaderTitleStyle("导图", AMBER);
+            applyHeaderTitleStyle("导图 ▾", AMBER);
+            bindStudyModeTitle();
             metaView.setVisibility(View.VISIBLE);
-            questionSeekBar.setVisibility(View.GONE);
+            setQuestionSeekVisible(false);
             progressPeekView.setVisibility(View.GONE);
             if (filterRowView != null) filterRowView.setVisibility(View.VISIBLE);
             bindFilterButton(typeFilterButton, currentCardChapter == null ? "全部章节" : truncate(currentCardChapter, 8), currentCardChapter != null, new View.OnClickListener() {
@@ -2095,11 +2150,12 @@ public class MainActivity extends Activity {
             return;
         }
 
-        String title = rememberMode ? "记题" : (wrongMode ? "错题" : "刷题");
+        String title = rememberMode ? "记题 ▾" : (wrongMode ? "错题 ▾" : "刷题 ▾");
         int accent = rememberMode ? AMBER : (wrongMode ? RED : BLUE);
         applyHeaderTitleStyle(title, accent);
+        bindStudyModeTitle();
         metaView.setVisibility(View.VISIBLE);
-        questionSeekBar.setVisibility(View.VISIBLE);
+        setQuestionSeekVisible(true);
         progressPeekView.setVisibility(View.VISIBLE);
         if (filterRowView != null) filterRowView.setVisibility(View.VISIBLE);
         bindFilterButton(typeFilterButton, shortFilterLabel("题型", typeFilter, ALL_TYPES), !ALL_TYPES.equals(typeFilter), new View.OnClickListener() {
@@ -2129,6 +2185,69 @@ public class MainActivity extends Activity {
         });
         syncQuestionSeekBar();
     }
+
+    private void setHeaderHomeVisible(boolean visible) {
+        if (homeButton == null) return;
+        homeButton.setBackground(homeButtonBackground());
+        homeButton.setVisibility(visible ? View.VISIBLE : View.GONE);
+        if (visible) {
+            homeButton.bringToFront();
+        }
+        homeButton.invalidate();
+    }
+
+    private void setQuestionSeekVisible(boolean visible) {
+        int state = visible ? View.VISIBLE : View.GONE;
+        if (questionSeekShell != null) {
+            questionSeekShell.setVisibility(state);
+        }
+        if (questionSeekBar != null) {
+            questionSeekBar.setVisibility(state);
+        }
+    }
+
+    private void bindStudyModeTitle() {
+        titleView.setClickable(true);
+        titleView.setFocusable(true);
+        titleView.setContentDescription("切换学习模式");
+        titleView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showStudyModeDialog();
+            }
+        });
+    }
+
+    private void clearHeaderTitleAction() {
+        titleView.setOnClickListener(null);
+        titleView.setClickable(false);
+        titleView.setFocusable(false);
+        titleView.setContentDescription(null);
+    }
+
+    private void showStudyModeDialog() {
+        final List<String> items = new ArrayList<>();
+        items.add("刷题");
+        items.add("记题");
+        items.add("错题");
+        items.add("导图");
+        int checked = cardMode ? 3 : (rememberMode ? 1 : (wrongMode ? 2 : 0));
+        showChoiceSheet("切换学习模式", items, checked, new ChoiceHandler() {
+            @Override
+            public void onChosen(int which, String item) {
+                if (which == 1) {
+                    showRememberMode();
+                } else if (which == 2) {
+                    showWrongMode();
+                } else if (which == 3) {
+                    showCardMode(currentCardChapter);
+                } else {
+                    showAllMode();
+                }
+            }
+        });
+    }
+
     private void applyHeaderTitleStyle(String text, int accent) {
         titleView.setText(text);
         titleView.setTextColor(accent);
@@ -2315,7 +2434,7 @@ public class MainActivity extends Activity {
     }
 
     private void syncQuestionSeekBar() {
-        if (questionSeekBar == null || cardMode || settingsMode) return;
+        if (questionSeekBar == null || homeMode || suggestionsMode || cardMode || settingsMode) return;
         int size = visibleQuestions.size();
         questionSeekSyncing = true;
         questionSeekBar.setEnabled(size > 1);
@@ -2344,6 +2463,14 @@ public class MainActivity extends Activity {
     private void renderQuestion() {
         refreshChrome();
         refreshFloatingExportButton();
+        if (homeMode) {
+            renderCoursesHomePage();
+            return;
+        }
+        if (suggestionsMode) {
+            renderSuggestionsPage();
+            return;
+        }
         if (settingsMode) {
             renderSettingsPage();
             return;
@@ -2416,11 +2543,137 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void prepareStaticPageContent() {
+        selected.clear();
+        blankInputs.clear();
+        submitted = false;
+        lastAnswerOk = null;
+        optionList.removeAllViews();
+        imageList.removeAllViews();
+        memoryReasonContainer.removeAllViews();
+        memoryReasonContainer.setVisibility(View.GONE);
+        feedbackContainer.removeAllViews();
+        feedbackContainer.setVisibility(View.GONE);
+        submitButton.setVisibility(View.GONE);
+        stemView.setVisibility(View.GONE);
+        if (filterRowView != null) filterRowView.setVisibility(View.GONE);
+        optionList.setPadding(0, dp(6), 0, dp(12));
+    }
+
+    private void renderCoursesHomePage() {
+        prepareStaticPageContent();
+
+        LinearLayout hero = new LinearLayout(this);
+        hero.setOrientation(LinearLayout.VERTICAL);
+        hero.setPadding(dp(18), dp(18), dp(18), dp(18));
+        hero.setBackground(homeHeroBackground());
+        if (Build.VERSION.SDK_INT >= 21) {
+            hero.setElevation(dp(3));
+        }
+        TextView heroTitle = text("备考宝典", 26, TEXT, true);
+        heroTitle.setIncludeFontPadding(false);
+        hero.addView(heroTitle, new LinearLayout.LayoutParams(-1, -2));
+        TextView heroBody = text("选择课程后继续上次的筛选分组和题目位置。", 13, MUTED, false);
+        heroBody.setLineSpacing(dp(3), 1.0f);
+        LinearLayout.LayoutParams heroBodyLp = new LinearLayout.LayoutParams(-1, -2);
+        heroBodyLp.topMargin = dp(8);
+        hero.addView(heroBody, heroBodyLp);
+        optionList.addView(hero, new LinearLayout.LayoutParams(-1, -2));
+
+        TextView section = text("课程", 14, BLUE, true);
+        LinearLayout.LayoutParams sectionLp = new LinearLayout.LayoutParams(-1, -2);
+        sectionLp.topMargin = dp(18);
+        optionList.addView(section, sectionLp);
+
+        LinearLayout courseCard = new LinearLayout(this);
+        courseCard.setOrientation(LinearLayout.VERTICAL);
+        courseCard.setPadding(dp(18), dp(16), dp(18), dp(16));
+        courseCard.setBackground(courseEntryBackground());
+        courseCard.setClickable(true);
+        courseCard.setFocusable(true);
+        courseCard.setContentDescription("进入计算机网络课程");
+        if (Build.VERSION.SDK_INT >= 21) {
+            courseCard.setElevation(dp(4));
+        }
+        installPressFeedback(courseCard);
+        courseCard.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showRestoredStudyMode();
+            }
+        });
+        TextView courseTitle = text("计算机网络", 20, TEXT, true);
+        courseTitle.setIncludeFontPadding(false);
+        courseCard.addView(courseTitle, new LinearLayout.LayoutParams(-1, -2));
+        TextView courseMeta = text(allQuestions.size() + " 题 · " + chapterList().size()
+                + " 章 · 刷题 / 记题 / 错题 / 导图", 13, MUTED, false);
+        courseMeta.setLineSpacing(dp(3), 1.0f);
+        LinearLayout.LayoutParams courseMetaLp = new LinearLayout.LayoutParams(-1, -2);
+        courseMetaLp.topMargin = dp(8);
+        courseCard.addView(courseMeta, courseMetaLp);
+        TextView courseAction = text("继续学习", 13, BLUE, true);
+        LinearLayout.LayoutParams courseActionLp = new LinearLayout.LayoutParams(-1, -2);
+        courseActionLp.topMargin = dp(14);
+        courseCard.addView(courseAction, courseActionLp);
+        LinearLayout.LayoutParams courseLp = new LinearLayout.LayoutParams(-1, -2);
+        courseLp.topMargin = dp(10);
+        optionList.addView(courseCard, courseLp);
+
+        scrollView.post(new Runnable() {
+            @Override
+            public void run() {
+                scrollView.scrollTo(0, 0);
+            }
+        });
+    }
+
+    private void renderSuggestionsPage() {
+        prepareStaticPageContent();
+        addSettingsSectionTitle(optionList, "反馈建议", "");
+
+        LinearLayout suggestCard = settingsCard();
+        TextView intro = text("复制或分享下面的模板，把问题、截图情况和期望效果补上。", 14, MUTED, false);
+        intro.setLineSpacing(dp(4), 1.0f);
+        suggestCard.addView(intro, new LinearLayout.LayoutParams(-1, -2));
+        addSettingsActionCardButton(suggestCard, "复制建议模板", true, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                copyFeedbackTemplate();
+            }
+        });
+        addSettingsActionCardButton(suggestCard, "分享建议模板", false, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                shareFeedbackTemplate();
+            }
+        });
+        optionList.addView(suggestCard, new LinearLayout.LayoutParams(-1, -2));
+
+        LinearLayout previewCard = settingsCard();
+        TextView previewTitle = text("模板预览", 14, BLUE, true);
+        previewCard.addView(previewTitle, new LinearLayout.LayoutParams(-1, -2));
+        TextView preview = text(buildFeedbackTemplate(), 13, TEXT, false);
+        preview.setLineSpacing(dp(4), 1.0f);
+        preview.setTextIsSelectable(true);
+        LinearLayout.LayoutParams previewLp = new LinearLayout.LayoutParams(-1, -2);
+        previewLp.topMargin = dp(10);
+        previewCard.addView(preview, previewLp);
+        optionList.addView(previewCard, new LinearLayout.LayoutParams(-1, -2));
+
+        scrollView.post(new Runnable() {
+            @Override
+            public void run() {
+                scrollView.scrollTo(0, 0);
+            }
+        });
+    }
+
     private void renderCardView() {
         selected.clear();
         blankInputs.clear();
         submitted = false;
         lastAnswerOk = null;
+        optionList.setPadding(0, dp(16), 0, dp(8));
         optionList.removeAllViews();
         imageList.removeAllViews();
         memoryReasonContainer.removeAllViews();
@@ -2635,6 +2888,8 @@ public class MainActivity extends Activity {
     }
 
     private void showCardMode(String chapter) {
+        homeMode = false;
+        suggestionsMode = false;
         cardMode = true;
         rememberMode = false;
         wrongMode = false;
@@ -3976,6 +4231,57 @@ public class MainActivity extends Activity {
         return drawable;
     }
 
+    private GradientDrawable homeButtonBackground() {
+        GradientDrawable drawable = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{
+                        THEME_LIGHT.equals(themeMode) ? Color.argb(178, 255, 255, 255) : Color.argb(118, 48, 55, 72),
+                        THEME_LIGHT.equals(themeMode) ? Color.argb(116, 238, 244, 255) : Color.argb(72, 25, 30, 42)
+                }
+        );
+        drawable.setShape(GradientDrawable.OVAL);
+        drawable.setStroke(dp(1), THEME_LIGHT.equals(themeMode)
+                ? Color.argb(120, 202, 214, 238)
+                : Color.argb(76, 220, 230, 250));
+        return drawable;
+    }
+
+    private GradientDrawable homeHeroBackground() {
+        GradientDrawable drawable = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{
+                        THEME_LIGHT.equals(themeMode) ? Color.argb(250, 255, 255, 255) : Color.argb(218, 39, 46, 62),
+                        THEME_LIGHT.equals(themeMode) ? Color.argb(222, 236, 242, 255) : Color.argb(184, 24, 31, 46)
+                }
+        );
+        drawable.setCornerRadii(new float[]{
+                dp(24), dp(24),
+                dp(14), dp(14),
+                dp(30), dp(30),
+                dp(14), dp(14)
+        });
+        drawable.setStroke(dp(1), THEME_LIGHT.equals(themeMode)
+                ? Color.argb(130, 214, 224, 244)
+                : Color.argb(74, 214, 225, 245));
+        return drawable;
+    }
+
+    private GradientDrawable courseEntryBackground() {
+        GradientDrawable drawable = new GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[]{
+                        Color.argb(THEME_LIGHT.equals(themeMode) ? 42 : 82,
+                                Color.red(BLUE), Color.green(BLUE), Color.blue(BLUE)),
+                        THEME_LIGHT.equals(themeMode) ? Color.argb(240, 255, 255, 255) : Color.argb(168, 31, 37, 51)
+                }
+        );
+        drawable.setCornerRadius(dp(22));
+        drawable.setStroke(dp(1), THEME_LIGHT.equals(themeMode)
+                ? Color.argb(122, 194, 208, 238)
+                : Color.argb(72, 190, 204, 232));
+        return drawable;
+    }
+
     private GradientDrawable headerPanelBackground() {
         int start = THEME_LIGHT.equals(themeMode)
                 ? Color.argb(246, 255, 255, 255)
@@ -4576,8 +4882,71 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void copyFeedbackTemplate() {
+        String text = buildFeedbackTemplate();
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (clipboard != null) {
+            clipboard.setPrimaryClip(ClipData.newPlainText("备考宝典反馈建议", text));
+        }
+        Toast.makeText(this, "已复制建议模板", Toast.LENGTH_SHORT).show();
+    }
+
+    private void shareFeedbackTemplate() {
+        try {
+            String text = buildFeedbackTemplate();
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            if (clipboard != null) {
+                clipboard.setPrimaryClip(ClipData.newPlainText("备考宝典反馈建议", text));
+            }
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType("text/plain");
+            send.putExtra(Intent.EXTRA_SUBJECT, "备考宝典反馈建议");
+            send.putExtra(Intent.EXTRA_TEXT, text);
+            startActivity(Intent.createChooser(send, "发送反馈建议"));
+            Toast.makeText(this, "已复制模板，并打开分享", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "分享建议失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private String buildFeedbackTemplate() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("# 备考宝典反馈建议\n\n");
+        sb.append("- App 版本：").append(currentVersionSummary()).append("\n");
+        sb.append("- 当前课程：计算机网络\n");
+        sb.append("- 当前页面：").append(currentPageSummary()).append("\n");
+        sb.append("- 当前筛选：").append(activeFilterText()).append("\n");
+        sb.append("- 当前题目：").append(currentQuestionSummaryForFeedback()).append("\n\n");
+        sb.append("## 问题描述\n\n");
+        sb.append("请在这里写：哪里不好用、哪里显示不对、或你希望新增什么。\n\n");
+        sb.append("## 截图情况\n\n");
+        sb.append("请写：是否有截图、截图里大概是哪一页/哪一题。\n\n");
+        sb.append("## 期望效果\n\n");
+        sb.append("请写：你希望它改成什么样。");
+        return sb.toString();
+    }
+
+    private String currentPageSummary() {
+        if (homeMode) return "课程首页";
+        if (settingsMode) return "设置";
+        if (suggestionsMode) return "建议";
+        if (cardMode) return "导图";
+        if (rememberMode) return "记题";
+        if (wrongMode) return "错题";
+        return "刷题";
+    }
+
+    private String currentQuestionSummaryForFeedback() {
+        if (visibleQuestions.isEmpty()) {
+            return "无";
+        }
+        int index = clampIndex(currentIndex, visibleQuestions.size());
+        Question q = visibleQuestions.get(index);
+        return q.label + " / " + q.typeName + " / " + q.chapter;
+    }
+
     private String defaultExportPromptTemplate() {
-        return "请你像计算机网络老师一样，帮我把这道题讲到小白能懂。\n"
+        return "请你像“备考宝典：计算机网络”的老师一样，帮我把这道题讲到小白能懂。\n"
                 + "请基于 App 的短解析和知识点详解继续展开：题眼是什么、为什么这样选、其他常见想法错在哪里、我应该怎么记。";
     }
 
@@ -4732,12 +5101,12 @@ public class MainActivity extends Activity {
             String text = buildCurrentQuestionShareText(q);
             ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
             if (clipboard != null) {
-                clipboard.setPrimaryClip(ClipData.newPlainText("计算机网络当前题目", text));
+                clipboard.setPrimaryClip(ClipData.newPlainText("备考宝典：计算机网络当前题目", text));
             }
 
             Intent send = new Intent(Intent.ACTION_SEND);
             send.setType("text/plain");
-            send.putExtra(Intent.EXTRA_SUBJECT, "计算机网络题目 " + q.label);
+            send.putExtra(Intent.EXTRA_SUBJECT, "备考宝典：计算机网络题目 " + q.label);
             send.putExtra(Intent.EXTRA_TEXT, text);
             startActivity(Intent.createChooser(send, "发送当前题目给 AI / QQ"));
             Toast.makeText(this, "已复制当前题目，并打开分享", Toast.LENGTH_SHORT).show();
@@ -4865,7 +5234,7 @@ public class MainActivity extends Activity {
         if (!allMemoryCards.isEmpty()) {
             List<String> labels = allCardLabels();
             StringBuilder sb = new StringBuilder();
-            sb.append("# 计算机网络复习宝典：章节思维导图全集\n\n");
+            sb.append("# 备考宝典：计算机网络章节思维导图全集\n\n");
             sb.append("- 覆盖题目：").append(labels.size()).append(" 题\n");
             sb.append("- 覆盖章节：").append(cardChapterList().size()).append(" 章\n");
             sb.append("- 覆盖知识点导图：").append(allMemoryCards.size()).append(" 组\n");
@@ -6200,6 +6569,9 @@ public class MainActivity extends Activity {
         }
         for (JSONObject asset : apkAssets) {
             String name = asset.optString("name", "");
+            if ("备考宝典.apk".equalsIgnoreCase(name)) {
+                return asset;
+            }
             if ("计算机网络复习宝典.apk".equalsIgnoreCase(name)) {
                 return asset;
             }
@@ -7207,6 +7579,47 @@ public class MainActivity extends Activity {
 
     private int dp(int value) {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
+    }
+
+    private class HomeIconButton extends View {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Path path = new Path();
+
+        HomeIconButton(Context context) {
+            super(context);
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            float w = getWidth();
+            float h = getHeight();
+            float stroke = Math.max(dp(2), w * 0.055f);
+            paint.reset();
+            paint.setAntiAlias(true);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(stroke);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setStrokeJoin(Paint.Join.ROUND);
+            paint.setColor(THEME_LIGHT.equals(themeMode) ? BLUE : Color.WHITE);
+
+            path.reset();
+            path.moveTo(w * 0.24f, h * 0.48f);
+            path.lineTo(w * 0.50f, h * 0.25f);
+            path.lineTo(w * 0.76f, h * 0.48f);
+            canvas.drawPath(path, paint);
+
+            path.reset();
+            path.moveTo(w * 0.31f, h * 0.47f);
+            path.lineTo(w * 0.31f, h * 0.73f);
+            path.lineTo(w * 0.44f, h * 0.73f);
+            path.lineTo(w * 0.44f, h * 0.58f);
+            path.lineTo(w * 0.56f, h * 0.58f);
+            path.lineTo(w * 0.56f, h * 0.73f);
+            path.lineTo(w * 0.69f, h * 0.73f);
+            path.lineTo(w * 0.69f, h * 0.47f);
+            canvas.drawPath(path, paint);
+        }
     }
 
     private static class Question {

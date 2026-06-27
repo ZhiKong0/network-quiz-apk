@@ -11,7 +11,7 @@ ANDROID_HOME = Path(os.environ["ANDROID_HOME"])
 BUILD_TOOLS = ANDROID_HOME / "build-tools" / "35.0.0"
 PLATFORM = ANDROID_HOME / "platforms" / "android-35" / "android.jar"
 RELEASE_APK_NAME = "review-baodian.apk"
-LOCALIZED_APK_NAME = "\u8ba1\u7b97\u673a\u7f51\u7edc\u590d\u4e60\u5b9d\u5178.apk"
+LOCALIZED_APK_NAME = "\u5907\u8003\u5b9d\u5178.apk"
 
 
 def run(args, cwd=None):
