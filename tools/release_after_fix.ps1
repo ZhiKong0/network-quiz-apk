@@ -158,6 +158,18 @@ try {
     } else {
         & $publishScript -RepoSlug $RepoSlug -MetadataOutputPath $metadataTempPath
     }
+    if (Test-Path $metadataTempPath) {
+        Copy-Item -LiteralPath $metadataTempPath -Destination (Join-Path $root "release\exam-prep-handbook-update.json") -Force
+        Copy-Item -LiteralPath $metadataTempPath -Destination (Join-Path $root "release\network_quiz_update.json") -Force
+        git add .\release\exam-prep-handbook-update.json .\release\network_quiz_update.json
+        $metadataStatus = (git status --porcelain -- .\release\exam-prep-handbook-update.json .\release\network_quiz_update.json | Out-String).Trim()
+        if ($metadataStatus.Length -gt 0) {
+            Invoke-NativeOrThrow { git commit -m "Sync v$versionName update metadata [skip-release]" | Out-Null } "Failed to commit synced update metadata for $tag."
+            if ($hasOrigin) {
+                Invoke-NativeWithRetry { git push origin $Branch | Out-Null } "Failed to push synced update metadata for $tag."
+            }
+        }
+    }
 } finally {
     if (Test-Path $metadataTempPath) {
         Remove-Item $metadataTempPath -Force -ErrorAction SilentlyContinue

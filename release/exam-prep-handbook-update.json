@@ -3,16 +3,16 @@
   "versionCode": 70,
   "versionName": "2.10.45",
   "apkFileName": "exam-prep-handbook.apk",
-  "apkDownloadUrl": "https://ghfast.top/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/latest/download/exam-prep-handbook.apk",
+  "apkDownloadUrl": "https://ghfast.top/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.45/exam-prep-handbook.apk",
   "apkDownloadCandidates": [
-    "https://ghfast.top/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/latest/download/exam-prep-handbook.apk",
-    "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/latest/download/exam-prep-handbook.apk",
     "https://ghfast.top/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.45/exam-prep-handbook.apk",
-    "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.45/exam-prep-handbook.apk"
+    "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.45/exam-prep-handbook.apk",
+    "https://ghfast.top/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/latest/download/exam-prep-handbook.apk",
+    "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/latest/download/exam-prep-handbook.apk"
   ],
-  "releaseHtmlUrl": "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/latest",
-  "releaseNotes": "# v2.10.45\n\n- Auto release after fix: Signal: render all formula questions as images\n- 信号与系统 Q36 改为图片兜底：题干和参考答案直接显示整理后的图片，避开复杂公式在手机端排版错乱的问题。\n- 大题答案区域底部增加留白，自评按钮不再被底部导航遮住。\n- 信号与系统题目继续保持和计算机网络一致的原生题卡样式；只有确实难以稳定渲染的复杂大题使用图片。\n- 保留在线更新兼容资产：`exam-prep-handbook.apk`、`review-baodian.apk`、`exam-prep-handbook-update.json`、`network_quiz_update.json`。",
+  "releaseHtmlUrl": "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/tag/v2.10.45",
+  "releaseNotes": "# v2.10.45\n\n- 信号与系统 40 道题全部改为 MathJax 高清图片渲染：题干、单选选项、答案解析都不再依赖原生 TextView 猜公式。\n- 单选题保留点击选项即提交的交互，但选项内容改用图片显示，避免公式字号过大、根号/上下标显示不完整。\n- 大题参考答案改用完整答案解析图，Q36 等复杂 Z 变换题已重新渲染，公式、分式、表格都能正常显示。\n- 新增 `tools/render_signal_system_images.js`，后续修改信号与系统题库后可以一键重渲染全部公式图片。\n- 保留在线更新兼容资产：`exam-prep-handbook.apk`、`review-baodian.apk`、`exam-prep-handbook-update.json`、`network_quiz_update.json`。",
   "apkSize": 27102085,
-  "sha256": "af0134067283088d7cf254e3786a3646842e8d44fa3f9bbed6c961cb9cf5b134",
-  "generatedAt": "2026-06-27T18:42:04.563484+00:00"
+  "sha256": "4f05833197d372dc02f8e478456e994768fca29624344070bc5d698d0e9f5ab8",
+  "generatedAt": "2026-06-27T18:48:14.349921+00:00"
 }
