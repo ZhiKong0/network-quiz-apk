@@ -1,18 +1,6 @@
 # v2.10.44
 
-- Auto release after fix: Signal: use image fallback for Q36 rendering
-- Auto release after fix: Fix signal formula rendering
-- 修复“信号与系统”题目公式渲染：不再把整题塞进 WebView，选项、题干和解析统一使用与“计算机网络”相同的原生排版。
-- 修复信号题选项字号/高度过大的问题；公式只在 `$...$` 等片段内做离线上下标、希腊字母、根号和常见运算符显示。
-- 已在模拟器验证信号-Q04 初始页和答题解析页均不再裸露 `$`、`\sin`、`\sqrt` 等 LaTeX 标记。
-
-- Auto release after fix: Quiz: add marked essay questions
-- Auto release after fix: Release: harden exam prep auto publishing
-- Auto release after fix: UI: simplify study chrome and rename project
-- 启动 App 后默认恢复上次学习页；无记录时进入“刷题”，不再先停在课程首页。
-- 底部高频导航改为“记题 / 刷题 / 错题 / 导图”，在设置、建议、课程页也能一键回到学习模式。
-- 右上角新增自绘三横菜单按钮，点击从右侧打开玻璃侧边栏。
-- 侧边栏只保留低频入口：课程选择、设置、建议；标题显示“备考宝典 / 计算机网络”。
-- 顶部学习模式标题改为静态显示，去掉下拉箭头和模式选择弹窗。
-- 第二行用进度胶囊展示题目进度，例如“1/6 · 1-15”，后面显示题型与章节/知识点。
-- 英文项目名迁移为 exam-prep-handbook，Release 同时保留旧资产别名以兼容旧版更新。
+- 信号与系统 Q36 改为图片兜底：题干和参考答案直接显示整理后的图片，避开复杂公式在手机端排版错乱的问题。
+- 大题答案区域底部增加留白，自评按钮不再被底部导航遮住。
+- 信号与系统题目继续保持和计算机网络一致的原生题卡样式；只有确实难以稳定渲染的复杂大题使用图片。
+- 保留在线更新兼容资产：`exam-prep-handbook.apk`、`review-baodian.apk`、`exam-prep-handbook-update.json`、`network_quiz_update.json`。
