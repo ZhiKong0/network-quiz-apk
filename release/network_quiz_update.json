@@ -1,18 +1,18 @@
 {
   "packageName": "com.dz.networkquiz",
-  "versionCode": 61,
-  "versionName": "2.10.36",
+  "versionCode": 62,
+  "versionName": "2.10.37",
   "apkFileName": "review-baodian.apk",
-  "apkDownloadUrl": "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.36/review-baodian.apk",
+  "apkDownloadUrl": "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
   "apkDownloadCandidates": [
-    "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.36/review-baodian.apk",
-    "https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.36/review-baodian.apk",
     "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
-    "https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk"
+    "https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
+    "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.37/review-baodian.apk",
+    "https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.37/review-baodian.apk"
   ],
-  "releaseHtmlUrl": "https://github.com/ZhiKong0/review-baodian-apk/releases/tag/v2.10.36",
-  "releaseNotes": "# v2.10.36\n\n- Auto release after fix: UI: add exam home navigation\n- 新增“备考宝典”课程首页，启动后先进入课程选择页。\n- 底部全局导航改为“课程 / 设置 / 建议”三项。\n- “计算机网络”课程入口会恢复上次筛选分组和题目位置。\n- 课程内“刷题 / 记题 / 错题 / 导图”切换移到顶部标题 chip。\n- 学习页、设置页、建议页新增顶部左上角自绘 Home 按钮，可返回课程首页。\n- 新增建议页，可复制或分享反馈建议模板。\n- 应用显示名称改为“备考宝典”，本地中文 APK 产物同步改名。",
-  "apkSize": 1100340,
-  "sha256": "391605b37137e3a2ea14a88ecb15e487839612c28bb3155d25f9190d2335e40d",
-  "generatedAt": "2026-06-27T06:28:34.800731+00:00"
+  "releaseHtmlUrl": "https://github.com/ZhiKong0/review-baodian-apk/releases/latest",
+  "releaseNotes": "# v2.10.37\n\n- Auto release after fix: UI: prioritize study navigation\n- Auto release after fix: UI: add exam home navigation\n- 新增“备考宝典”课程首页，启动后先进入课程选择页。\n- 底部全局导航改为“课程 / 设置 / 建议”三项。\n- “计算机网络”课程入口会恢复上次筛选分组和题目位置。\n- 课程内“刷题 / 记题 / 错题 / 导图”切换移到顶部标题 chip。\n- 学习页、设置页、建议页新增顶部左上角自绘 Home 按钮，可返回课程首页。\n- 新增建议页，可复制或分享反馈建议模板。\n- 应用显示名称改为“备考宝典”，本地中文 APK 产物同步改名。",
+  "apkSize": 1104439,
+  "sha256": "890d21c3fc464d6d92316930c6c722beae2a39bbfdde182f82a06b310fa89fdc",
+  "generatedAt": "2026-06-27T07:05:41.935712+00:00"
 }

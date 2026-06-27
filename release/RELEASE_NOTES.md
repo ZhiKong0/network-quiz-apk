@@ -1,5 +1,6 @@
-# v2.10.36
+# v2.10.37
 
+- Auto release after fix: UI: prioritize study navigation
 - Auto release after fix: UI: add exam home navigation
 - 新增“备考宝典”课程首页，启动后先进入课程选择页。
 - 底部全局导航改为“课程 / 设置 / 建议”三项。
