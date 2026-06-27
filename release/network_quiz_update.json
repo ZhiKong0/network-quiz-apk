@@ -1,18 +1,18 @@
 {
   "packageName": "com.dz.networkquiz",
-  "versionCode": 58,
-  "versionName": "2.10.33",
+  "versionCode": 59,
+  "versionName": "2.10.34",
   "apkFileName": "review-baodian.apk",
-  "apkDownloadUrl": "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.33/review-baodian.apk",
+  "apkDownloadUrl": "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
   "apkDownloadCandidates": [
-    "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.33/review-baodian.apk",
-    "https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.33/review-baodian.apk",
     "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
-    "https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk"
+    "https://github.com/ZhiKong0/review-baodian-apk/releases/latest/download/review-baodian.apk",
+    "https://ghfast.top/https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.34/review-baodian.apk",
+    "https://github.com/ZhiKong0/review-baodian-apk/releases/download/v2.10.34/review-baodian.apk"
   ],
-  "releaseHtmlUrl": "https://github.com/ZhiKong0/review-baodian-apk/releases/tag/v2.10.33",
-  "releaseNotes": "# v2.10.33\n\n- 记住上次学习位置：重新进入 App 会恢复上次的模式、题型筛选、章节筛选和当前题号。\n- 记题/刷题/错题按各自模式分别保存进度，同一章节不会再每次回到第一题。\n- 清理高重复解析块：DNS、HTTP、邮件、FTP、安全、OSI、C/S-P2P、分组交换、DHCP、奈氏/香农等 80 个高频条目改为贴题知识关系表。\n- 整库审计通过：372/372 题结构完整，长段/表格重复块为 0。\n- 放宽导图全屏画布边界：全图适配留白、布局留白、拖拽边界和分页宽度同步加大。\n- 已在模拟器验证：第 3 章进度强杀重开仍保持 `38/72 · 2-47`；记题模式重开仍保持 `58/72 · 3-72`；全屏导图保持竖屏铺满。",
+  "releaseHtmlUrl": "https://github.com/ZhiKong0/review-baodian-apk/releases/latest",
+  "releaseNotes": "# v2.10.34\n\n- Auto release after fix: UI: restore reason highlight rendering\n- 记住上次学习位置：重新进入 App 会恢复上次的模式、题型筛选、章节筛选和当前题号。\n- 记题/刷题/错题按各自模式分别保存进度，同一章节不会再每次回到第一题。\n- 清理高重复解析块：DNS、HTTP、邮件、FTP、安全、OSI、C/S-P2P、分组交换、DHCP、奈氏/香农等 80 个高频条目改为贴题知识关系表。\n- 整库审计通过：372/372 题结构完整，长段/表格重复块为 0。\n- 放宽导图全屏画布边界：全图适配留白、布局留白、拖拽边界和分页宽度同步加大。\n- 已在模拟器验证：第 3 章进度强杀重开仍保持 `38/72 · 2-47`；记题模式重开仍保持 `58/72 · 3-72`；全屏导图保持竖屏铺满。",
   "apkSize": 1096245,
-  "sha256": "9fb3477aad5a07b574d2be5fe413f89441f8ca00437d4006c1d8310455a621c3",
-  "generatedAt": "2026-06-26T20:57:54.537623+00:00"
+  "sha256": "89d013e2ffc905cac74b19f08719f946814a64afdbaae3456dc34001339a075e",
+  "generatedAt": "2026-06-27T04:46:01.496708+00:00"
 }
