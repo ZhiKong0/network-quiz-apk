@@ -152,8 +152,8 @@ def build_release(args, metadata: dict) -> dict:
         "published_at": datetime.now(timezone.utc).isoformat(),
         "assets": [
             {
-                "name": "network_quiz_update.json",
-                "browser_download_url": f"https://{args.host}/assets/network_quiz_update.json",
+                "name": "exam-prep-handbook-update.json",
+                "browser_download_url": f"https://{args.host}/assets/exam-prep-handbook-update.json",
                 "size": 0,
             },
             {
@@ -189,7 +189,7 @@ def make_handler(args, repo_info: dict, release: dict, metadata: dict):
                 return self.send_bytes(repo_bytes, "application/json; charset=utf-8")
             if path == f"/repos/{args.repo_slug}/releases/latest":
                 return self.send_bytes(release_bytes, "application/json; charset=utf-8")
-            if path == "/assets/network_quiz_update.json":
+            if path in ("/assets/exam-prep-handbook-update.json", "/assets/network_quiz_update.json"):
                 return self.send_bytes(metadata_bytes, "application/json; charset=utf-8")
             if path == f"/assets/{apk_path.name}":
                 payload = apk_path.read_bytes()

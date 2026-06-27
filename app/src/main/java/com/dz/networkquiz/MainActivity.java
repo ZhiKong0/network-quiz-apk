@@ -99,7 +99,7 @@ import java.util.Map;
 import java.util.Set;
 
 public class MainActivity extends Activity {
-    private static final String UPDATE_LOG_TAG = "NetworkQuizUpdater";
+    private static final String UPDATE_LOG_TAG = "ExamPrepHandbookUpdater";
     private static final String ALL_TYPES = "全部题型";
     private static final String ALL_CHAPTERS = "全部章节";
     private static final String PREF_WRONG_REQUIRED = "wrong_required_correct";
@@ -119,6 +119,7 @@ public class MainActivity extends Activity {
     private static final String PREF_FLOAT_EXPORT_X = "float_export_x";
     private static final String PREF_FLOAT_EXPORT_Y = "float_export_y";
     private static final String LEGACY_UPDATE_REPO_SLUG = "ZhiKong0/network-quiz-apk";
+    private static final String LEGACY_REVIEW_UPDATE_REPO_SLUG = "ZhiKong0/review-baodian-apk";
     private static final String THEME_DARK = "dark";
     private static final String THEME_LIGHT = "light";
     private static final String STUDY_MODE_QUIZ = "quiz";
@@ -126,11 +127,14 @@ public class MainActivity extends Activity {
     private static final String STUDY_MODE_WRONG = "wrong";
     private static final String STUDY_MODE_CARD = "card";
     private static final String PREF_LAST_CARD_CHAPTER = "last_card_chapter";
-    private static final String DEFAULT_UPDATE_REPO_SLUG = "ZhiKong0/review-baodian-apk";
+    private static final String DEFAULT_UPDATE_REPO_SLUG = "ZhiKong0/exam-prep-handbook-apk";
     private static final String TAG_MARKDOWN_TABLE_SCROLL = "markdown_table_scroll";
     private static final String TAG_MIND_MAP_BOARD = "mind_map_board";
     private static final String TAG_FLOATING_EXPORT_BUTTON = "floating_export_button";
-    private static final String UPDATE_METADATA_NAME = "network_quiz_update.json";
+    private static final String UPDATE_METADATA_NAME = "exam-prep-handbook-update.json";
+    private static final String LEGACY_UPDATE_METADATA_NAME = "network_quiz_update.json";
+    private static final String RELEASE_APK_NAME = "exam-prep-handbook.apk";
+    private static final String LEGACY_RELEASE_APK_NAME = "review-baodian.apk";
     private static final String UPDATE_CACHE_DIR = "updates";
     private static final String UPDATE_INSTALL_ACTION = "com.dz.networkquiz.UPDATE_INSTALL_STATUS";
     private static final String UPDATE_STATUS_NOT_CHECKED = "\u672a\u68c0\u67e5";
@@ -163,6 +167,7 @@ public class MainActivity extends Activity {
     private LinearLayout headerContainer;
     private View menuButton;
     private TextView titleView;
+    private LinearLayout metaRowView;
     private TextView metaView;
     private TextView progressPeekView;
     private TextView updateVersionLineView;
@@ -1269,22 +1274,28 @@ public class MainActivity extends Activity {
         titleView.setPadding(dp(16), dp(6), dp(16), dp(6));
         titleRow.addView(titleView, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
 
+        metaRowView = new LinearLayout(this);
+        metaRowView.setOrientation(LinearLayout.HORIZONTAL);
+        metaRowView.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams metaRowLp = new LinearLayout.LayoutParams(-1, -2);
+        metaRowLp.topMargin = dp(6);
+        infoCard.addView(metaRowView, metaRowLp);
+
         progressPeekView = text("", 10, MUTED, true);
         progressPeekView.setIncludeFontPadding(false);
         progressPeekView.setGravity(Gravity.CENTER);
+        progressPeekView.setSingleLine(true);
         progressPeekView.setPadding(dp(9), dp(4), dp(9), dp(4));
-        FrameLayout.LayoutParams progressLp = new FrameLayout.LayoutParams(-2, -2, Gravity.END | Gravity.CENTER_VERTICAL);
-        progressLp.rightMargin = dp(52);
-        titleRow.addView(progressPeekView, progressLp);
+        LinearLayout.LayoutParams progressLp = new LinearLayout.LayoutParams(-2, -2);
+        progressLp.rightMargin = dp(8);
+        metaRowView.addView(progressPeekView, progressLp);
 
         metaView = text("", 11, MUTED, false);
         metaView.setIncludeFontPadding(false);
         metaView.setSingleLine(true);
         metaView.setEllipsize(TextUtils.TruncateAt.END);
-        metaView.setGravity(Gravity.CENTER_HORIZONTAL);
-        LinearLayout.LayoutParams metaLp = new LinearLayout.LayoutParams(-1, -2);
-        metaLp.topMargin = dp(6);
-        infoCard.addView(metaView, metaLp);
+        metaView.setGravity(Gravity.CENTER_VERTICAL);
+        metaRowView.addView(metaView, new LinearLayout.LayoutParams(0, -2, 1f));
 
         questionSeekBar = new SeekBar(this);
         questionSeekBar.setSplitTrack(false);
@@ -1630,42 +1641,15 @@ public class MainActivity extends Activity {
         sideDrawerPanel.removeAllViews();
         sideDrawerPanel.setBackground(drawerPanelBackground());
 
-        TextView courseTitle = text("计算机网络", 22, TEXT, true);
+        TextView appTitle = text("备考宝典", 22, TEXT, true);
+        appTitle.setIncludeFontPadding(false);
+        sideDrawerPanel.addView(appTitle, new LinearLayout.LayoutParams(-1, -2));
+
+        TextView courseTitle = text("计算机网络 · " + currentVersionSummary(), 12, MUTED, false);
         courseTitle.setIncludeFontPadding(false);
-        sideDrawerPanel.addView(courseTitle, new LinearLayout.LayoutParams(-1, -2));
-
-        TextView version = text("备考宝典 · " + currentVersionSummary(), 12, MUTED, false);
-        version.setIncludeFontPadding(false);
-        LinearLayout.LayoutParams versionLp = new LinearLayout.LayoutParams(-1, -2);
-        versionLp.topMargin = dp(6);
-        sideDrawerPanel.addView(version, versionLp);
-
-        addDrawerSection("学习模式");
-        String activeMode = activeStudyModeForDrawer();
-        addDrawerRow("记题", "直接显示答案与理由，适合快速记忆", AMBER, STUDY_MODE_REMEMBER.equals(activeMode), new Runnable() {
-            @Override
-            public void run() {
-                showRememberMode();
-            }
-        });
-        addDrawerRow("刷题", "按题型和章节练习，保留答题反馈", BLUE, STUDY_MODE_QUIZ.equals(activeMode), new Runnable() {
-            @Override
-            public void run() {
-                showAllMode();
-            }
-        });
-        addDrawerRow("错题", "复刷错题本，按设置次数移除", RED, STUDY_MODE_WRONG.equals(activeMode), new Runnable() {
-            @Override
-            public void run() {
-                showWrongMode();
-            }
-        });
-        addDrawerRow("导图", "按章节看知识结构和分支关系", AMBER, STUDY_MODE_CARD.equals(activeMode), new Runnable() {
-            @Override
-            public void run() {
-                showCardMode(currentCardChapter);
-            }
-        });
+        LinearLayout.LayoutParams courseLp = new LinearLayout.LayoutParams(-1, -2);
+        courseLp.topMargin = dp(6);
+        sideDrawerPanel.addView(courseTitle, courseLp);
 
         addDrawerSection("更多");
         addDrawerRow("课程选择", "返回课程入口，目前包含计算机网络", BLUE, homeMode, new Runnable() {
@@ -2307,9 +2291,8 @@ public class MainActivity extends Activity {
         if (homeMode) {
             applyHeaderTitleStyle("备考宝典", BLUE);
             clearHeaderTitleAction();
-            metaView.setVisibility(View.GONE);
+            setMetaRowVisible(false);
             setQuestionSeekVisible(false);
-            progressPeekView.setVisibility(View.GONE);
             if (filterRowView != null) filterRowView.setVisibility(View.GONE);
             return;
         }
@@ -2317,9 +2300,8 @@ public class MainActivity extends Activity {
         if (suggestionsMode) {
             applyHeaderTitleStyle("建议", AMBER);
             clearHeaderTitleAction();
-            metaView.setVisibility(View.GONE);
+            setMetaRowVisible(false);
             setQuestionSeekVisible(false);
-            progressPeekView.setVisibility(View.GONE);
             if (filterRowView != null) filterRowView.setVisibility(View.GONE);
             return;
         }
@@ -2327,19 +2309,17 @@ public class MainActivity extends Activity {
         if (settingsMode) {
             applyHeaderTitleStyle("设置", GREEN);
             clearHeaderTitleAction();
-            metaView.setVisibility(View.GONE);
+            setMetaRowVisible(false);
             setQuestionSeekVisible(false);
-            progressPeekView.setVisibility(View.GONE);
             if (filterRowView != null) filterRowView.setVisibility(View.GONE);
             return;
         }
 
         if (cardMode) {
-            applyHeaderTitleStyle("导图 ▾", AMBER);
-            bindStudyModeTitle();
-            metaView.setVisibility(View.VISIBLE);
+            applyHeaderTitleStyle("导图", AMBER);
+            clearHeaderTitleAction();
+            setMetaRowVisible(true);
             setQuestionSeekVisible(false);
-            progressPeekView.setVisibility(View.GONE);
             if (filterRowView != null) filterRowView.setVisibility(View.VISIBLE);
             bindFilterButton(typeFilterButton, currentCardChapter == null ? "全部章节" : truncate(currentCardChapter, 8), currentCardChapter != null, new View.OnClickListener() {
                 @Override
@@ -2366,13 +2346,12 @@ public class MainActivity extends Activity {
             return;
         }
 
-        String title = rememberMode ? "记题 ▾" : (wrongMode ? "错题 ▾" : "刷题 ▾");
+        String title = rememberMode ? "记题" : (wrongMode ? "错题" : "刷题");
         int accent = rememberMode ? AMBER : (wrongMode ? RED : BLUE);
         applyHeaderTitleStyle(title, accent);
-        bindStudyModeTitle();
-        metaView.setVisibility(View.VISIBLE);
+        clearHeaderTitleAction();
+        setMetaRowVisible(true);
         setQuestionSeekVisible(true);
-        progressPeekView.setVisibility(View.VISIBLE);
         if (filterRowView != null) filterRowView.setVisibility(View.VISIBLE);
         bindFilterButton(typeFilterButton, shortFilterLabel("题型", typeFilter, ALL_TYPES), !ALL_TYPES.equals(typeFilter), new View.OnClickListener() {
             @Override
@@ -2402,6 +2381,19 @@ public class MainActivity extends Activity {
         syncQuestionSeekBar();
     }
 
+    private void setMetaRowVisible(boolean visible) {
+        int state = visible ? View.VISIBLE : View.GONE;
+        if (metaRowView != null) {
+            metaRowView.setVisibility(state);
+        }
+        if (metaView != null) {
+            metaView.setVisibility(state);
+        }
+        if (progressPeekView != null) {
+            progressPeekView.setVisibility(state);
+        }
+    }
+
     private void setHeaderMenuVisible(boolean visible) {
         if (menuButton == null) return;
         menuButton.setBackground(menuButtonBackground());
@@ -2422,46 +2414,11 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void bindStudyModeTitle() {
-        titleView.setClickable(true);
-        titleView.setFocusable(true);
-        titleView.setContentDescription("切换学习模式");
-        titleView.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                showStudyModeDialog();
-            }
-        });
-    }
-
     private void clearHeaderTitleAction() {
         titleView.setOnClickListener(null);
         titleView.setClickable(false);
         titleView.setFocusable(false);
         titleView.setContentDescription(null);
-    }
-
-    private void showStudyModeDialog() {
-        final List<String> items = new ArrayList<>();
-        items.add("刷题");
-        items.add("记题");
-        items.add("错题");
-        items.add("导图");
-        int checked = cardMode ? 3 : (rememberMode ? 1 : (wrongMode ? 2 : 0));
-        showChoiceSheet("切换学习模式", items, checked, new ChoiceHandler() {
-            @Override
-            public void onChosen(int which, String item) {
-                if (which == 1) {
-                    showRememberMode();
-                } else if (which == 2) {
-                    showWrongMode();
-                } else if (which == 3) {
-                    showCardMode(currentCardChapter);
-                } else {
-                    showAllMode();
-                }
-            }
-        });
     }
 
     private void applyHeaderTitleStyle(String text, int accent) {
@@ -2637,16 +2594,14 @@ public class MainActivity extends Activity {
     }
 
     private void refreshMeta(Question q) {
-        String info = (currentIndex + 1) + "/" + visibleQuestions.size()
-                + "  ·  " + q.label
-                + "  ·  " + q.typeName
-                + "  ·  " + truncate(TextUtils.isEmpty(q.knowledge) ? q.chapter : q.knowledge, 24);
-        metaView.setText(info);
+        progressPeekView.setText((currentIndex + 1) + "/" + visibleQuestions.size() + " · " + q.label);
+        metaView.setText(q.typeName + " · " + truncate(TextUtils.isEmpty(q.knowledge) ? q.chapter : q.knowledge, 24));
     }
 
     private void refreshEmptyMeta() {
         int total = wrongMode ? filteredWrongCount() : filteredTotalCount();
-        metaView.setText("0/" + total + "  ·  " + activeFilterText());
+        progressPeekView.setText("0/" + total);
+        metaView.setText(activeFilterText());
     }
 
     private void syncQuestionSeekBar() {
@@ -2673,6 +2628,8 @@ public class MainActivity extends Activity {
             text = "定位 " + text;
         }
         progressPeekView.setText(text);
+        metaView.setText(targetQuestion.typeName + " · "
+                + truncate(TextUtils.isEmpty(targetQuestion.knowledge) ? targetQuestion.chapter : targetQuestion.knowledge, 24));
         progressPeekView.setAlpha(dragging ? 1f : 0.9f);
     }
 
@@ -2901,6 +2858,7 @@ public class MainActivity extends Activity {
             if (filterRowView != null) filterRowView.setVisibility(View.VISIBLE);
             stemView.setVisibility(View.VISIBLE);
             stemView.setText("当前没有可显示的思维导图");
+            progressPeekView.setText("0/0");
             metaView.setText("请重新选择章节");
             return;
         }
@@ -2911,10 +2869,8 @@ public class MainActivity extends Activity {
         final boolean allowTapFlip = false;
         if (filterRowView != null) filterRowView.setVisibility(View.VISIBLE);
         stemView.setVisibility(View.GONE);
-        metaView.setText((currentCardIndex + 1) + "/" + visibleCards.size()
-                + "  ·  " + card.chapter
-                + "  ·  思维导图"
-                + "  ·  画板内拖动缩放，按钮切换分区");
+        progressPeekView.setText((currentCardIndex + 1) + "/" + visibleCards.size());
+        metaView.setText(card.chapter + " · 思维导图 · 画板内拖动缩放，按钮切换分区");
         feedbackContainer.setPadding(dp(2), dp(8), dp(2), dp(16));
         feedbackContainer.setTranslationX(0f);
         feedbackContainer.setAlpha(1f);
@@ -6306,7 +6262,8 @@ public class MainActivity extends Activity {
 
     private String ensureDefaultUpdateRepoSlug(String raw) {
         String normalized = normalizeRepoSlug(raw);
-        if (LEGACY_UPDATE_REPO_SLUG.equalsIgnoreCase(normalized)) {
+        if (LEGACY_UPDATE_REPO_SLUG.equalsIgnoreCase(normalized)
+                || LEGACY_REVIEW_UPDATE_REPO_SLUG.equalsIgnoreCase(normalized)) {
             return DEFAULT_UPDATE_REPO_SLUG;
         }
         if (normalized.matches("^[^/]+/[^/]+$")) {
@@ -6646,6 +6603,8 @@ public class MainActivity extends Activity {
                 String name = asset.optString("name", "");
                 if (UPDATE_METADATA_NAME.equalsIgnoreCase(name)) {
                     metadataAsset = asset;
+                } else if (metadataAsset == null && LEGACY_UPDATE_METADATA_NAME.equalsIgnoreCase(name)) {
+                    metadataAsset = asset;
                 }
                 if (name.toLowerCase(Locale.US).endsWith(".apk")) {
                     apkAssets.add(asset);
@@ -6662,7 +6621,7 @@ public class MainActivity extends Activity {
                         "读取 Release 更新元数据失败"
                 );
             } catch (UpdateCheckException metadataError) {
-                info.validationNotes.add("network_quiz_update.json 读取失败，已回退到直接识别 APK：" + metadataError.userMessage);
+                info.validationNotes.add("更新元数据读取失败，已回退到直接识别 APK：" + metadataError.userMessage);
             }
             if (meta != null) {
                 info.hasMetadataAsset = true;
@@ -6685,7 +6644,7 @@ public class MainActivity extends Activity {
                 }
             }
         } else {
-            info.validationNotes.add("Release 未附带 network_quiz_update.json，当前会退回到直接识别 APK。");
+            info.validationNotes.add("Release 未附带更新元数据，当前会退回到直接识别 APK。");
         }
 
         JSONObject apkAsset = pickPreferredApkAsset(apkAssets, info.apkName);
@@ -6708,7 +6667,7 @@ public class MainActivity extends Activity {
         }
 
         if (info.versionName.length() == 0 && info.versionCode <= 0) {
-            throw new UpdateCheckException("这个 Release 缺少可识别的版本号，请检查 tag 或 network_quiz_update.json");
+            throw new UpdateCheckException("这个 Release 缺少可识别的版本号，请检查 tag 或更新元数据");
         }
         if (info.downloadUrl.length() == 0) {
             throw new UpdateCheckException("这个 Release 里没有找到 APK 安装包");
@@ -6834,6 +6793,12 @@ public class MainActivity extends Activity {
         }
         for (JSONObject asset : apkAssets) {
             String name = asset.optString("name", "");
+            if (RELEASE_APK_NAME.equalsIgnoreCase(name)) {
+                return asset;
+            }
+            if (LEGACY_RELEASE_APK_NAME.equalsIgnoreCase(name)) {
+                return asset;
+            }
             if ("备考宝典.apk".equalsIgnoreCase(name)) {
                 return asset;
             }
@@ -6845,19 +6810,35 @@ public class MainActivity extends Activity {
     }
 
     private String buildJsDelivrUpdateMetadataUrl(String repoSlug) {
-        return "https://cdn.jsdelivr.net/gh/" + repoSlug + "@main/release/" + UPDATE_METADATA_NAME;
+        return buildJsDelivrUpdateMetadataUrl(repoSlug, UPDATE_METADATA_NAME);
+    }
+
+    private String buildJsDelivrUpdateMetadataUrl(String repoSlug, String metadataName) {
+        return "https://cdn.jsdelivr.net/gh/" + repoSlug + "@main/release/" + metadataName;
     }
 
     private String buildGithubRawUpdateMetadataUrl(String repoSlug) {
-        return "https://raw.githubusercontent.com/" + repoSlug + "/main/release/" + UPDATE_METADATA_NAME;
+        return buildGithubRawUpdateMetadataUrl(repoSlug, UPDATE_METADATA_NAME);
+    }
+
+    private String buildGithubRawUpdateMetadataUrl(String repoSlug, String metadataName) {
+        return "https://raw.githubusercontent.com/" + repoSlug + "/main/release/" + metadataName;
     }
 
     private String buildGithubLatestMetadataUrl(String repoSlug) {
-        return "https://github.com/" + repoSlug + "/releases/latest/download/" + UPDATE_METADATA_NAME;
+        return buildGithubLatestMetadataUrl(repoSlug, UPDATE_METADATA_NAME);
+    }
+
+    private String buildGithubLatestMetadataUrl(String repoSlug, String metadataName) {
+        return "https://github.com/" + repoSlug + "/releases/latest/download/" + metadataName;
     }
 
     private String buildGhfastLatestMetadataUrl(String repoSlug) {
-        return buildGhfastMirrorUrl(buildGithubLatestMetadataUrl(repoSlug));
+        return buildGhfastLatestMetadataUrl(repoSlug, UPDATE_METADATA_NAME);
+    }
+
+    private String buildGhfastLatestMetadataUrl(String repoSlug, String metadataName) {
+        return buildGhfastMirrorUrl(buildGithubLatestMetadataUrl(repoSlug, metadataName));
     }
 
     private String buildGithubReleasePageUrl(String repoSlug) {
@@ -6902,34 +6883,38 @@ public class MainActivity extends Activity {
     private JSONObject fetchFastUpdateMetadata(String repoSlug) throws UpdateCheckException {
         logUpdateDebug("fetchFastUpdateMetadata repo=" + repoSlug);
         UpdateCheckException lastError = null;
-        String[] urls = new String[] {
-                buildGhfastLatestMetadataUrl(repoSlug),
-                buildGithubLatestMetadataUrl(repoSlug),
-                buildGithubRawUpdateMetadataUrl(repoSlug),
-                buildJsDelivrUpdateMetadataUrl(repoSlug)
-        };
-        String[] errorMessages = new String[] {
-                "读取加速 Release 元数据失败",
-                "读取 Release 元数据失败",
-                "读取原始更新元数据失败",
-                "读取 jsDelivr 更新元数据失败"
-        };
-        for (int i = 0; i < urls.length; i++) {
+        List<String> urls = new ArrayList<>();
+        List<String> errorMessages = new ArrayList<>();
+        for (String metadataName : updateMetadataNames()) {
+            urls.add(buildGhfastLatestMetadataUrl(repoSlug, metadataName));
+            errorMessages.add("读取加速 Release 元数据失败");
+            urls.add(buildGithubLatestMetadataUrl(repoSlug, metadataName));
+            errorMessages.add("读取 Release 元数据失败");
+            urls.add(buildGithubRawUpdateMetadataUrl(repoSlug, metadataName));
+            errorMessages.add("读取原始更新元数据失败");
+            urls.add(buildJsDelivrUpdateMetadataUrl(repoSlug, metadataName));
+            errorMessages.add("读取 jsDelivr 更新元数据失败");
+        }
+        for (int i = 0; i < urls.size(); i++) {
             try {
                 return readFastGithubJsonObject(
-                        urls[i],
+                        urls.get(i),
                         "还没有找到更新元数据文件",
-                        errorMessages[i]
+                        errorMessages.get(i)
                 );
             } catch (UpdateCheckException error) {
                 lastError = error;
-                logUpdateWarn("fast metadata candidate failed: " + urls[i], error);
+                logUpdateWarn("fast metadata candidate failed: " + urls.get(i), error);
             }
         }
         if (lastError != null) {
             throw lastError;
         }
         throw new UpdateCheckException("还没有找到更新元数据文件");
+    }
+
+    private String[] updateMetadataNames() {
+        return new String[] { UPDATE_METADATA_NAME, LEGACY_UPDATE_METADATA_NAME };
     }
 
     private String readTextUrl(String urlValue) throws Exception {
@@ -6947,7 +6932,7 @@ public class MainActivity extends Activity {
             connection.setReadTimeout(readTimeoutMs);
             connection.setRequestProperty("Accept", "application/vnd.github+json");
             connection.setRequestProperty("X-GitHub-Api-Version", "2022-11-28");
-            connection.setRequestProperty("User-Agent", "NetworkQuizUpdater/" + currentVersionName());
+            connection.setRequestProperty("User-Agent", "ExamPrepHandbookUpdater/" + currentVersionName());
             int code = connection.getResponseCode();
             stream = code >= 200 && code < 300 ? connection.getInputStream() : connection.getErrorStream();
             if (stream == null) {
@@ -7129,13 +7114,15 @@ public class MainActivity extends Activity {
         if (raw == null) return "";
         raw = raw.trim();
         if (raw.length() == 0) return "";
-        if (raw.startsWith("network_quiz_update.json 读取失败，已回退到直接识别 APK：")) {
+        if (raw.startsWith("更新元数据读取失败，已回退到直接识别 APK：")
+                || raw.startsWith("network_quiz_update.json 读取失败，已回退到直接识别 APK：")) {
             return "补充说明：版本和安装包已经识别完成，附加元数据读取较慢，不影响下载和安装。";
         }
         if (raw.startsWith("加速更新元数据读取失败，已回退到 GitHub Release：")) {
             return "补充说明：加速通道响应较慢，已自动切换到 GitHub Release 检查。";
         }
-        if (raw.startsWith("Release 未附带 network_quiz_update.json")) {
+        if (raw.startsWith("Release 未附带更新元数据")
+                || raw.startsWith("Release 未附带 network_quiz_update.json")) {
             return "补充说明：这个版本未附带额外元数据，已直接根据 APK 识别更新。";
         }
         if (raw.startsWith("未提供更新元数据文件")) {
@@ -7149,8 +7136,10 @@ public class MainActivity extends Activity {
         String raw = info.validationNotes.get(0);
         if (raw == null) return MUTED;
         raw = raw.trim();
-        if (raw.startsWith("network_quiz_update.json 读取失败，已回退到直接识别 APK：")
+        if (raw.startsWith("更新元数据读取失败，已回退到直接识别 APK：")
+                || raw.startsWith("network_quiz_update.json 读取失败，已回退到直接识别 APK：")
                 || raw.startsWith("加速更新元数据读取失败，已回退到 GitHub Release：")
+                || raw.startsWith("Release 未附带更新元数据")
                 || raw.startsWith("Release 未附带 network_quiz_update.json")
                 || raw.startsWith("未提供更新元数据文件")) {
             return BLUE;
@@ -7216,7 +7205,7 @@ public class MainActivity extends Activity {
             connection = (HttpURLConnection) new URL(url).openConnection();
             connection.setConnectTimeout(HTTP_TIMEOUT_MS);
             connection.setReadTimeout(HTTP_TIMEOUT_MS * 2);
-            connection.setRequestProperty("User-Agent", "NetworkQuizUpdater/" + currentVersionName());
+            connection.setRequestProperty("User-Agent", "ExamPrepHandbookUpdater/" + currentVersionName());
             connection.setRequestProperty("Accept", "application/octet-stream");
             int code = connection.getResponseCode();
             if (code < 200 || code >= 300) {
@@ -7225,7 +7214,7 @@ public class MainActivity extends Activity {
             long total = connection.getContentLengthLong();
             stream = connection.getInputStream();
             File dir = updateCacheDir();
-            String fileName = safeFileName(info.apkName, "network-quiz-update.apk");
+            String fileName = safeFileName(info.apkName, "exam-prep-handbook-update.apk");
             tempFile = new File(dir, fileName + ".download");
             File finalFile = new File(dir, fileName);
             cleanupUpdateCache(tempFile.getAbsolutePath());
@@ -7698,16 +7687,30 @@ public class MainActivity extends Activity {
         final Dialog dialog = new Dialog(this);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setCancelable(true);
+        dialog.setCanceledOnTouchOutside(true);
 
         FrameLayout shell = new FrameLayout(this);
         shell.setPadding(dp(18), statusBarInset() + dp(18), dp(18), bottomSafeInset() + dp(14));
         shell.setBackgroundColor(Color.argb(THEME_LIGHT.equals(themeMode) ? 54 : 84, 11, 17, 26));
+        shell.setClickable(true);
+        shell.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                dialog.dismiss();
+            }
+        });
 
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(18), dp(18), dp(18), dp(16));
         panel.setBackground(choiceSheetBackground());
         panel.setElevation(dp(12));
+        panel.setClickable(true);
+        panel.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+            }
+        });
         shell.addView(panel, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER));
 
         TextView titleView = text(title, 18, TEXT, true);
@@ -7773,17 +7776,6 @@ public class MainActivity extends Activity {
             if (i > 0) rowLp.topMargin = dp(8);
             list.addView(row, rowLp);
         }
-
-        Button closeButton = chromeButton("关闭");
-        closeButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                dialog.dismiss();
-            }
-        });
-        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(-1, dp(44));
-        closeLp.topMargin = dp(14);
-        panel.addView(closeButton, closeLp);
 
         dialog.setContentView(shell);
         if (dialog.getWindow() != null) {

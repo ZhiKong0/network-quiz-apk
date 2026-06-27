@@ -10,7 +10,7 @@ RELEASE_NOTES = ROOT / "release" / "RELEASE_NOTES.md"
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Update versionCode/versionName for the Network Quiz APK."
+        description="Update versionCode/versionName for the Exam Prep Handbook APK."
     )
     parser.add_argument("--version-name", help="New versionName, for example 2.10.1")
     parser.add_argument("--version-code", type=int, help="New versionCode, for example 26")

@@ -38,7 +38,7 @@ function Get-BlockingStatusText {
             if (-not $trimmed) {
                 continue
             }
-            if ($trimmed -match 'release/network_quiz_update\.json$') {
+            if ($trimmed -match 'release/(exam-prep-handbook-update|network_quiz_update)\.json$') {
                 continue
             }
             $blocking.Add($trimmed)
@@ -53,7 +53,10 @@ if ($env:CODEX_AUTO_RELEASE_RUNNING -eq "1") {
     exit 0
 }
 
-$enabled = Get-GitConfigValue "networkquiz.autoRelease"
+$enabled = Get-GitConfigValue "examprep.autoRelease"
+if (-not $enabled) {
+    $enabled = Get-GitConfigValue "networkquiz.autoRelease"
+}
 if ($enabled -ne "true") {
     exit 0
 }

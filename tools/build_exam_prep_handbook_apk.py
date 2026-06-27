@@ -6,11 +6,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WORK = Path(os.environ["TEMP"]) / "NetworkQuizApkBuild"
+WORK = Path(os.environ["TEMP"]) / "ExamPrepHandbookApkBuild"
 ANDROID_HOME = Path(os.environ["ANDROID_HOME"])
 BUILD_TOOLS = ANDROID_HOME / "build-tools" / "35.0.0"
 PLATFORM = ANDROID_HOME / "platforms" / "android-35" / "android.jar"
-RELEASE_APK_NAME = "review-baodian.apk"
+RELEASE_APK_NAME = "exam-prep-handbook.apk"
+LEGACY_RELEASE_APK_NAME = "review-baodian.apk"
 LOCALIZED_APK_NAME = "\u5907\u8003\u5b9d\u5178.apk"
 
 
@@ -95,7 +96,7 @@ def main():
     run(["jar", "cf", build / "classes.jar", "-C", build / "classes", "."])
     run([d8, "--lib", PLATFORM, "--output", build / "dex", build / "classes.jar"])
     run(["jar", "uf", out / "base-unsigned.apk", "-C", build / "dex", "classes.dex"])
-    run([zipalign, "-f", "-p", "4", out / "base-unsigned.apk", out / "network-quiz-aligned.apk"])
+    run([zipalign, "-f", "-p", "4", out / "base-unsigned.apk", out / "exam-prep-handbook-aligned.apk"])
 
     keystore = WORK / "network_quiz_debug.keystore"
     if not keystore.exists():
@@ -118,10 +119,10 @@ def main():
             "-validity",
             "10000",
             "-dname",
-            "CN=DZ Network Quiz, OU=Study, O=DZ, L=Local, ST=Local, C=CN",
+            "CN=DZ Exam Prep Handbook, OU=Study, O=DZ, L=Local, ST=Local, C=CN",
         ])
 
-    signed_apk = out / "network-quiz.apk"
+    signed_apk = out / "exam-prep-handbook.apk"
     run([
         apksigner,
         "sign",
@@ -135,17 +136,20 @@ def main():
         "pass:android",
         "--out",
         signed_apk,
-        out / "network-quiz-aligned.apk",
+        out / "exam-prep-handbook-aligned.apk",
     ])
     run([apksigner, "verify", "--verbose", signed_apk])
 
     final_dir = ROOT / "build" / "out"
     final_dir.mkdir(parents=True, exist_ok=True)
     release_apk = final_dir / RELEASE_APK_NAME
+    legacy_release_apk = final_dir / LEGACY_RELEASE_APK_NAME
     localized_apk = final_dir / LOCALIZED_APK_NAME
     shutil.copy2(signed_apk, release_apk)
+    shutil.copy2(signed_apk, legacy_release_apk)
     shutil.copy2(signed_apk, localized_apk)
     print("FINAL_RELEASE", release_apk, release_apk.stat().st_size)
+    print("FINAL_LEGACY_RELEASE", legacy_release_apk, legacy_release_apk.stat().st_size)
     print("FINAL_LOCALIZED", localized_apk, localized_apk.stat().st_size)
 
 

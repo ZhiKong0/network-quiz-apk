@@ -60,7 +60,7 @@ function Get-RunningEmulators([string]$adbPath) {
 }
 
 if (-not $ApkPath) {
-    $ApkPath = Join-Path $root "build\out\review-baodian.apk"
+    $ApkPath = Join-Path $root "build\out\exam-prep-handbook.apk"
 }
 
 if (-not (Test-Path $ApkPath)) {

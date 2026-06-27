@@ -9,10 +9,12 @@ from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "app" / "src" / "main" / "AndroidManifest.xml"
-OUTPUT = ROOT / "release" / "network_quiz_update.json"
+OUTPUT = ROOT / "release" / "exam-prep-handbook-update.json"
+LEGACY_OUTPUT = ROOT / "release" / "network_quiz_update.json"
 DEFAULT_APK_CANDIDATES = [
+    ROOT / "build" / "out" / "exam-prep-handbook.apk",
     ROOT / "build" / "out" / "review-baodian.apk",
-    ROOT / "build" / "out" / "\u8ba1\u7b97\u673a\u7f51\u7edc\u590d\u4e60\u5b9d\u5178.apk",
+    ROOT / "build" / "out" / "\u5907\u8003\u5b9d\u5178.apk",
 ]
 
 
@@ -22,7 +24,7 @@ def parse_args():
     parser.add_argument("--output", default=str(OUTPUT))
     parser.add_argument("--apk-download-url", default="")
     parser.add_argument("--release-html-url", default="")
-    parser.add_argument("--repo-slug", default="ZhiKong0/review-baodian-apk")
+    parser.add_argument("--repo-slug", default="ZhiKong0/exam-prep-handbook-apk")
     parser.add_argument("--release-notes", default="")
     parser.add_argument("--release-notes-file", default="")
     return parser.parse_args()
@@ -104,6 +106,9 @@ def main():
     }
     output.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(output)
+    if output.resolve() == OUTPUT.resolve():
+        LEGACY_OUTPUT.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(LEGACY_OUTPUT)
 
 
 if __name__ == "__main__":

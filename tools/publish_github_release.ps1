@@ -12,7 +12,10 @@ Set-Location $root
 
 function Try-LoadGitHubTokenFromCredentialManager {
     try {
-        $credential = "protocol=https`nhost=github.com`n`n" | git credential-manager get 2>$null
+        $credential = "protocol=https`nhost=github.com`n`n" | git credential fill 2>$null
+        if (-not $credential) {
+            $credential = "protocol=https`nhost=github.com`n`n" | git credential-manager get 2>$null
+        }
         if (-not $credential) {
             return $false
         }
@@ -58,12 +61,12 @@ function Resolve-MetadataPath([string]$preferredPath, [string]$defaultPath) {
     return $defaultPath
 }
 
-function New-MetadataUploadCopy([string]$sourcePath) {
+function New-ReleaseUploadCopy([string]$sourcePath, [string]$targetName) {
     $uploadDir = Join-Path $root "tmp\release_upload"
     if (-not (Test-Path $uploadDir)) {
         New-Item -ItemType Directory -Path $uploadDir -Force | Out-Null
     }
-    $uploadPath = Join-Path $uploadDir "network_quiz_update.json"
+    $uploadPath = Join-Path $uploadDir $targetName
     Copy-Item -LiteralPath $sourcePath -Destination $uploadPath -Force
     return $uploadPath
 }
@@ -88,7 +91,7 @@ function Ensure-InitialCommit {
         return
     }
     git add .
-    git commit -m "Initial commit: Network Quiz APK" | Out-Null
+    git commit -m "Initial commit: Exam Prep Handbook APK" | Out-Null
 }
 
 function Has-OriginRemote {
@@ -156,8 +159,8 @@ function Invoke-GhWithRetry([scriptblock]$command, [string]$errorMessage, [int]$
     throw $errorMessage
 }
 
-function Invoke-JsDelivrMetadataPurge([string]$repoSlug) {
-    $purgeUrl = "https://purge.jsdelivr.net/gh/$repoSlug@main/release/network_quiz_update.json"
+function Invoke-JsDelivrMetadataPurge([string]$repoSlug, [string]$metadataName) {
+    $purgeUrl = "https://purge.jsdelivr.net/gh/$repoSlug@main/release/$metadataName"
     try {
         $response = Invoke-WebRequest -Uri $purgeUrl -UseBasicParsing -TimeoutSec 30
         if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 300) {
@@ -182,12 +185,12 @@ if (-not $versionName) {
 
 $tag = "v$versionName"
 $notes = Join-Path $root "release\RELEASE_NOTES.md"
-$defaultMeta = Join-Path $root "release\network_quiz_update.json"
+$defaultMeta = Join-Path $root "release\exam-prep-handbook-update.json"
 $meta = Resolve-MetadataPath -preferredPath $MetadataOutputPath -defaultPath $defaultMeta
 
 Ensure-ReleaseNotes -path $notes -versionName $versionName
 
-python .\tools\build_network_quiz_apk.py
+python .\tools\build_exam_prep_handbook_apk.py
 python .\tools\generate_release_metadata.py --release-notes-file $notes --repo-slug $RepoSlug --output $meta
 
 $metaInfo = Read-JsonFile $meta
@@ -195,6 +198,7 @@ $apk = Join-Path $root ("build\out\" + $metaInfo.apkFileName)
 if (-not (Test-Path $apk)) {
     throw "APK not found: $apk"
 }
+$legacyApk = Join-Path $root "build\out\review-baodian.apk"
 
 if ($CreateRepo -and -not (Has-OriginRemote)) {
     Invoke-GhWithRetry { gh repo create $RepoSlug --public --source . --remote origin --push } "Failed to create or push GitHub repo $RepoSlug."
@@ -206,21 +210,30 @@ if (Test-ReleaseExists -repoSlug $RepoSlug -tag $tag) {
 } else {
     Invoke-GhWithRetry { gh release create $tag $apk --repo $RepoSlug --title $tag --notes-file $notes } "Failed to create GitHub Release $tag."
 }
+if ((Test-Path $legacyApk) -and ([System.IO.Path]::GetFullPath($legacyApk) -ne [System.IO.Path]::GetFullPath($apk))) {
+    Invoke-GhWithRetry { gh release upload $tag $legacyApk --repo $RepoSlug --clobber } "Failed to upload legacy APK asset for GitHub Release $tag."
+}
 
 $release = Get-ReleaseApi -repoSlug $RepoSlug -tag $tag
 $apkDownloadUrl = Find-ApkAssetUrl -release $release -preferredName $metaInfo.apkFileName
 
 python .\tools\generate_release_metadata.py --release-notes-file $notes --repo-slug $RepoSlug --release-html-url $release.html_url --apk-download-url $apkDownloadUrl --output $meta
-$metadataUploadPath = New-MetadataUploadCopy -sourcePath $meta
+$metadataUploadPath = New-ReleaseUploadCopy -sourcePath $meta -targetName "exam-prep-handbook-update.json"
+$legacyMetadataUploadPath = New-ReleaseUploadCopy -sourcePath $meta -targetName "network_quiz_update.json"
 try {
     Invoke-GhWithRetry { gh release upload $tag $metadataUploadPath --repo $RepoSlug --clobber } "Failed to upload update metadata asset for GitHub Release $tag."
+    Invoke-GhWithRetry { gh release upload $tag $legacyMetadataUploadPath --repo $RepoSlug --clobber } "Failed to upload legacy update metadata asset for GitHub Release $tag."
 } finally {
     if (Test-Path $metadataUploadPath) {
         Remove-Item $metadataUploadPath -Force -ErrorAction SilentlyContinue
     }
+    if (Test-Path $legacyMetadataUploadPath) {
+        Remove-Item $legacyMetadataUploadPath -Force -ErrorAction SilentlyContinue
+    }
 }
 
-Invoke-JsDelivrMetadataPurge -repoSlug $RepoSlug
+Invoke-JsDelivrMetadataPurge -repoSlug $RepoSlug -metadataName "exam-prep-handbook-update.json"
+Invoke-JsDelivrMetadataPurge -repoSlug $RepoSlug -metadataName "network_quiz_update.json"
 
 $releaseUrl = $release.html_url
 Write-Host "Release published:" $tag

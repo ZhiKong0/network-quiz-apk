@@ -97,6 +97,9 @@ function Invoke-NativeWithRetry([scriptblock]$command, [string]$errorMessage, [i
 }
 
 if (-not $RepoSlug) {
+    $RepoSlug = Get-GitConfigValue "examprep.releaseRepo"
+}
+if (-not $RepoSlug) {
     $RepoSlug = Get-GitConfigValue "networkquiz.releaseRepo"
 }
 if (-not $RepoSlug) {
@@ -125,7 +128,7 @@ if ($FixSummary -like "Release prep:*" -or $FixSummary -match '\[skip-release\]'
 Ensure-CleanWorktree
 
 $before = Get-ManifestInfo
-python .\tools\bump_network_quiz_version.py --increment patch
+python .\tools\bump_exam_prep_handbook_version.py --increment patch
 $after = Get-ManifestInfo
 $versionName = $after.VersionName
 $tag = "v$versionName"
@@ -133,10 +136,10 @@ $notesPath = Join-Path $root "release\RELEASE_NOTES.md"
 $metadataTempPath = Join-Path $root "tmp\auto_release_metadata_$versionName.json"
 
 Add-ReleaseNoteBullet -path $notesPath -bullet ("- Auto release after fix: " + $FixSummary)
-python .\tools\build_network_quiz_apk.py
+python .\tools\build_exam_prep_handbook_apk.py
 python .\tools\generate_release_metadata.py --release-notes-file $notesPath
 
-git add .\app\src\main\AndroidManifest.xml .\release\RELEASE_NOTES.md .\release\network_quiz_update.json
+git add .\app\src\main\AndroidManifest.xml .\release\RELEASE_NOTES.md .\release\exam-prep-handbook-update.json .\release\network_quiz_update.json
 
 $env:CODEX_AUTO_RELEASE_RUNNING = "1"
 Invoke-NativeOrThrow { git commit -m "Release prep: v$versionName" | Out-Null } "Failed to create release prep commit for $tag."
