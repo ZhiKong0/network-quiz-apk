@@ -160,6 +160,8 @@ public class MainActivity extends Activity {
     private static final int MAX_WRONG_REQUIRED = 10;
     private static final float MIND_MAP_MIN_SCALE = 0.12f;
     private static final float MIND_MAP_MAX_SCALE = 1.75f;
+    private static final float QUESTION_ZOOM_MIN_SCALE = 1.0f;
+    private static final float QUESTION_ZOOM_MAX_SCALE = 2.6f;
 
     private final List<Question> allQuestions = new ArrayList<>();
     private final List<MemoryCard> allMemoryCards = new ArrayList<>();
@@ -174,6 +176,7 @@ public class MainActivity extends Activity {
     private FrameLayout pageFrame;
     private FrameLayout rootFrame;
     private ScrollView scrollView;
+    private FrameLayout questionZoomFrame;
     private LinearLayout contentContainer;
     private LinearLayout swipePreview;
     private TextView swipePreviewTitle;
@@ -245,6 +248,7 @@ public class MainActivity extends Activity {
     private boolean questionSeekTracking = false;
     private boolean questionSeekSyncing = false;
     private boolean suppressQuestionPageSwipe = false;
+    private boolean questionZoomGestureActive = false;
     private boolean markdownTableGestureActive = false;
     private boolean mindMapGestureActive = false;
     private boolean floatingExportGestureActive = false;
@@ -262,6 +266,8 @@ public class MainActivity extends Activity {
     private String pendingInstallVersionName = null;
     private UpdateInfo lastUpdateInfo = null;
     private BroadcastReceiver updateInstallReceiver;
+    private ScaleGestureDetector questionScaleGestureDetector;
+    private float questionZoomScale = QUESTION_ZOOM_MIN_SCALE;
 
     private int BG;
     private int BG_ALT;
@@ -311,6 +317,30 @@ public class MainActivity extends Activity {
         restorePersistedUpdateStatus();
         applyThemePalette();
         touchSlop = ViewConfiguration.get(this).getScaledTouchSlop();
+        questionScaleGestureDetector = new ScaleGestureDetector(this,
+                new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                    @Override
+                    public boolean onScaleBegin(ScaleGestureDetector detector) {
+                        questionZoomGestureActive = true;
+                        suppressQuestionPageSwipe = true;
+                        requestNoIntercept(true);
+                        hideQuestionSwipePreview();
+                        return true;
+                    }
+
+                    @Override
+                    public boolean onScale(ScaleGestureDetector detector) {
+                        setQuestionZoomScale(questionZoomScale * detector.getScaleFactor());
+                        return true;
+                    }
+
+                    @Override
+                    public void onScaleEnd(ScaleGestureDetector detector) {
+                        if (questionZoomScale <= QUESTION_ZOOM_MIN_SCALE + 0.02f) {
+                            resetQuestionZoom(false);
+                        }
+                    }
+                });
         ensureUpdateInstallReceiver();
         cleanupUpdateCache(pendingInstallKeepPath());
         loadQuestions();
@@ -367,6 +397,9 @@ public class MainActivity extends Activity {
             suppressQuestionPageSwipe = true;
             requestNoIntercept(true);
         }
+        if (handleQuestionZoomTouch(event)) {
+            return true;
+        }
         if (action == MotionEvent.ACTION_DOWN
                 && isQuestionPageSwipeEnabled()
                 && isTouchInsideMarkdownTable(event)) {
@@ -399,11 +432,20 @@ public class MainActivity extends Activity {
             suppressQuestionPageSwipe = false;
             requestNoIntercept(false);
         }
+        if (questionZoomGestureActive
+                && (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)) {
+            questionZoomGestureActive = false;
+            suppressQuestionPageSwipe = false;
+            requestNoIntercept(false);
+            questionSwipeMode = 0;
+        }
         return handled;
     }
 
     private boolean isQuestionPageSwipeEnabled() {
         return !suppressQuestionPageSwipe
+                && !questionZoomGestureActive
+                && questionZoomScale <= QUESTION_ZOOM_MIN_SCALE + 0.02f
                 && !mindMapGestureActive
                 && !floatingExportGestureActive
                 && !sideDrawerOpen
@@ -411,6 +453,65 @@ public class MainActivity extends Activity {
                 && !suggestionsMode
                 && !cardMode
                 && !settingsMode;
+    }
+
+    private boolean isQuestionPageZoomEnabled() {
+        return !sideDrawerOpen
+                && !homeMode
+                && !suggestionsMode
+                && !cardMode
+                && !settingsMode
+                && scrollView != null
+                && contentContainer != null
+                && !visibleQuestions.isEmpty();
+    }
+
+    private boolean handleQuestionZoomTouch(MotionEvent event) {
+        if (questionScaleGestureDetector == null || !isQuestionPageZoomEnabled()) {
+            return false;
+        }
+        int action = event.getActionMasked();
+        boolean multiTouch = event.getPointerCount() >= 2
+                || action == MotionEvent.ACTION_POINTER_DOWN
+                || action == MotionEvent.ACTION_POINTER_UP;
+        if ((action == MotionEvent.ACTION_POINTER_DOWN
+                || (action == MotionEvent.ACTION_MOVE && event.getPointerCount() >= 2))
+                && isTouchInsideQuestionContent(event)) {
+            questionZoomGestureActive = true;
+            suppressQuestionPageSwipe = true;
+            questionSwipeMode = 0;
+            requestNoIntercept(true);
+            hideQuestionSwipePreview();
+            if (contentContainer != null) {
+                contentContainer.animate().cancel();
+            }
+            if (scrollView != null) {
+                scrollView.animate().cancel();
+                scrollView.setTranslationX(0f);
+                scrollView.setAlpha(1f);
+                scrollView.setScaleX(1f);
+                scrollView.setScaleY(1f);
+            }
+        }
+        if (!questionZoomGestureActive) {
+            return false;
+        }
+        questionScaleGestureDetector.onTouchEvent(event);
+        if (action == MotionEvent.ACTION_POINTER_UP || action == MotionEvent.ACTION_UP
+                || action == MotionEvent.ACTION_CANCEL) {
+            questionZoomGestureActive = false;
+            suppressQuestionPageSwipe = false;
+            requestNoIntercept(false);
+            questionSwipeMode = 0;
+        }
+        return multiTouch || questionZoomScale > QUESTION_ZOOM_MIN_SCALE + 0.02f;
+    }
+
+    private boolean isTouchInsideQuestionContent(MotionEvent event) {
+        View target = questionZoomFrame != null ? questionZoomFrame : scrollView;
+        return target != null
+                && target.getVisibility() == View.VISIBLE
+                && isRawPointInsideView(target, event.getRawX(), event.getRawY());
     }
 
     private boolean isTouchInsideMarkdownTable(MotionEvent event) {
@@ -1497,10 +1598,17 @@ public class MainActivity extends Activity {
         installSwipeNavigation(scrollView);
         pageFrame.addView(scrollView, new FrameLayout.LayoutParams(-1, -1));
 
+        questionZoomFrame = new FrameLayout(this);
+        questionZoomFrame.setClipChildren(false);
+        questionZoomFrame.setClipToPadding(false);
+        scrollView.addView(questionZoomFrame, new ScrollView.LayoutParams(-1, -2));
+
         contentContainer = new LinearLayout(this);
         contentContainer.setOrientation(LinearLayout.VERTICAL);
         contentContainer.setPadding(0, 0, 0, dp(24));
-        scrollView.addView(contentContainer, new ScrollView.LayoutParams(-1, -2));
+        contentContainer.setPivotX(0f);
+        contentContainer.setPivotY(0f);
+        questionZoomFrame.addView(contentContainer, new FrameLayout.LayoutParams(-1, -2));
 
         stemView = text("", 24, TEXT, true);
         stemView.setLineSpacing(dp(6), 1.0f);
@@ -2126,6 +2234,11 @@ public class MainActivity extends Activity {
             return false;
         }
         int action = event.getActionMasked();
+        if (event.getPointerCount() > 1
+                || action == MotionEvent.ACTION_POINTER_DOWN
+                || action == MotionEvent.ACTION_POINTER_UP) {
+            return false;
+        }
         if (action == MotionEvent.ACTION_DOWN) {
             swipeStartX = event.getRawX();
             swipeStartY = event.getRawY();
@@ -2264,6 +2377,72 @@ public class MainActivity extends Activity {
             contentContainer.animate().cancel();
             contentContainer.setTranslationX(0f);
             contentContainer.setAlpha(1f);
+        }
+    }
+
+    private void setQuestionZoomScale(float scale) {
+        questionZoomScale = clampFloat(scale, QUESTION_ZOOM_MIN_SCALE, QUESTION_ZOOM_MAX_SCALE);
+        applyQuestionZoom();
+    }
+
+    private void applyQuestionZoom() {
+        if (contentContainer == null) return;
+        contentContainer.setPivotX(0f);
+        contentContainer.setPivotY(0f);
+        contentContainer.setScaleX(questionZoomScale);
+        contentContainer.setScaleY(questionZoomScale);
+        scheduleQuestionZoomFrameSync();
+    }
+
+    private void scheduleQuestionZoomFrameSync() {
+        if (questionZoomFrame == null) return;
+        questionZoomFrame.post(new Runnable() {
+            @Override
+            public void run() {
+                syncQuestionZoomFrameSize();
+            }
+        });
+    }
+
+    private void syncQuestionZoomFrameSize() {
+        if (questionZoomFrame == null || contentContainer == null) return;
+        int measuredHeight = contentContainer.getMeasuredHeight();
+        if (measuredHeight <= 0) return;
+        ViewGroup.LayoutParams lp = questionZoomFrame.getLayoutParams();
+        if (lp == null) return;
+        int targetHeight = questionZoomScale <= QUESTION_ZOOM_MIN_SCALE + 0.02f
+                ? ViewGroup.LayoutParams.WRAP_CONTENT
+                : Math.max(measuredHeight, (int) Math.ceil(measuredHeight * questionZoomScale));
+        if (lp.height != targetHeight) {
+            lp.height = targetHeight;
+            questionZoomFrame.setLayoutParams(lp);
+        }
+    }
+
+    private void resetQuestionZoom(boolean animated) {
+        questionZoomGestureActive = false;
+        suppressQuestionPageSwipe = false;
+        requestNoIntercept(false);
+        questionZoomScale = QUESTION_ZOOM_MIN_SCALE;
+        if (contentContainer == null) return;
+        contentContainer.animate().cancel();
+        if (animated) {
+            contentContainer.animate()
+                    .scaleX(QUESTION_ZOOM_MIN_SCALE)
+                    .scaleY(QUESTION_ZOOM_MIN_SCALE)
+                    .setDuration(150)
+                    .setInterpolator(new DecelerateInterpolator(1.2f))
+                    .withEndAction(new Runnable() {
+                        @Override
+                        public void run() {
+                            syncQuestionZoomFrameSize();
+                        }
+                    })
+                    .start();
+        } else {
+            contentContainer.setScaleX(QUESTION_ZOOM_MIN_SCALE);
+            contentContainer.setScaleY(QUESTION_ZOOM_MIN_SCALE);
+            syncQuestionZoomFrameSize();
         }
     }
 
@@ -2750,6 +2929,9 @@ public class MainActivity extends Activity {
     private void renderQuestion() {
         refreshChrome();
         refreshFloatingExportButton();
+        if ((homeMode || suggestionsMode || settingsMode || cardMode) && contentContainer != null) {
+            resetQuestionZoom(false);
+        }
         if (homeMode) {
             renderCoursesHomePage();
             return;
@@ -2770,6 +2952,7 @@ public class MainActivity extends Activity {
         stemView.setVisibility(View.VISIBLE);
         if (!questionPageAnimating) {
             resetQuestionPageSurface();
+            resetQuestionZoom(false);
             hideQuestionSwipePreview();
         }
         feedbackContainer.setPadding(dp(16), dp(14), dp(16), dp(14));
@@ -2842,6 +3025,7 @@ public class MainActivity extends Activity {
         if (rememberMode) {
             revealRememberModeAnswer(q);
         }
+        scheduleQuestionZoomFrameSync();
     }
 
     private void prepareStaticPageContent() {
@@ -3896,6 +4080,7 @@ public class MainActivity extends Activity {
 
     private void renderQuestionMarkdown(LinearLayout container, String markdown, Question q) {
         renderMarkdown(container, markdown);
+        scheduleQuestionZoomFrameSync();
     }
 
     private void renderMathMarkdown(final LinearLayout container, String markdown, int initialHeightPx) {
@@ -5755,6 +5940,7 @@ public class MainActivity extends Activity {
             return;
         }
         if (questionPageAnimating || scrollView == null) return;
+        resetQuestionZoom(false);
         questionPageAnimating = true;
         prepareQuestionSwipePreview(delta);
         final float pageWidth = Math.max(dp(320), getWindow().getDecorView().getWidth());
