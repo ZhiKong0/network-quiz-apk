@@ -1,5 +1,6 @@
-# v2.10.46
+# v2.10.47
 
+- Auto release after fix: Quiz: add temporary pinch zoom
 - Auto release after fix: Signal: polish transparent formula images
 - 信号与系统 40 道题全部改为 MathJax 高清图片渲染：题干、单选选项、答案解析都不再依赖原生 TextView 猜公式。
 - 单选题保留点击选项即提交的交互，但选项内容改用图片显示，避免公式字号过大、根号/上下标显示不完整。
