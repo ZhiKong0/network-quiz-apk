@@ -138,8 +138,10 @@ public class MainActivity extends Activity {
     private static final String PREF_LAST_CARD_CHAPTER = "last_card_chapter";
     private static final String COURSE_NETWORK = "network";
     private static final String COURSE_SIGNAL_SYSTEM = "signal_system";
+    private static final String COURSE_XI_THOUGHT = "xi_thought";
     private static final String COURSE_NETWORK_NAME = "计算机网络";
     private static final String COURSE_SIGNAL_SYSTEM_NAME = "信号与系统";
+    private static final String COURSE_XI_THOUGHT_NAME = "习近平思想";
     private static final String DEFAULT_UPDATE_REPO_SLUG = "ZhiKong0/exam-prep-handbook-apk";
     private static final String TAG_MARKDOWN_TABLE_SCROLL = "markdown_table_scroll";
     private static final String TAG_MIND_MAP_BOARD = "mind_map_board";
@@ -663,13 +665,15 @@ public class MainActivity extends Activity {
 
     private String normalizeCourseId(String value) {
         if (COURSE_SIGNAL_SYSTEM.equals(value)) return COURSE_SIGNAL_SYSTEM;
+        if (COURSE_XI_THOUGHT.equals(value)) return COURSE_XI_THOUGHT;
         return COURSE_NETWORK;
     }
 
     private String courseName(String courseId) {
-        return COURSE_SIGNAL_SYSTEM.equals(normalizeCourseId(courseId))
-                ? COURSE_SIGNAL_SYSTEM_NAME
-                : COURSE_NETWORK_NAME;
+        String normalized = normalizeCourseId(courseId);
+        if (COURSE_SIGNAL_SYSTEM.equals(normalized)) return COURSE_SIGNAL_SYSTEM_NAME;
+        if (COURSE_XI_THOUGHT.equals(normalized)) return COURSE_XI_THOUGHT_NAME;
+        return COURSE_NETWORK_NAME;
     }
 
     private String currentCourseName() {
@@ -680,14 +684,23 @@ public class MainActivity extends Activity {
         return COURSE_SIGNAL_SYSTEM.equals(currentCourseId);
     }
 
+    private boolean courseHasMemoryCards(String courseId) {
+        return COURSE_NETWORK.equals(normalizeCourseId(courseId));
+    }
+
+    private boolean currentCourseHasMemoryCards() {
+        return courseHasMemoryCards(currentCourseId);
+    }
+
     private String currentQuestionsAssetName() {
         return questionsAssetName(currentCourseId);
     }
 
     private String questionsAssetName(String courseId) {
-        return COURSE_SIGNAL_SYSTEM.equals(normalizeCourseId(courseId))
-                ? "signal_system_questions.json"
-                : "questions.json";
+        String normalized = normalizeCourseId(courseId);
+        if (COURSE_SIGNAL_SYSTEM.equals(normalized)) return "signal_system_questions.json";
+        if (COURSE_XI_THOUGHT.equals(normalized)) return "xi_thought_questions.json";
+        return "questions.json";
     }
 
     private String coursePrefName(String base) {
@@ -781,7 +794,7 @@ public class MainActivity extends Activity {
 
     private void loadMemoryCards() {
         allMemoryCards.clear();
-        if (isSignalSystemCourse()) {
+        if (!currentCourseHasMemoryCards()) {
             return;
         }
         try {
@@ -1864,7 +1877,7 @@ public class MainActivity extends Activity {
         sideDrawerPanel.addView(courseTitle, courseLp);
 
         addDrawerSection("更多");
-        addDrawerRow("课程选择", "切换计算机网络 / 信号与系统", BLUE, homeMode, new Runnable() {
+        addDrawerRow("课程选择", "切换三门课程与学习进度", BLUE, homeMode, new Runnable() {
             @Override
             public void run() {
                 showCoursesHome();
@@ -3076,6 +3089,7 @@ public class MainActivity extends Activity {
 
         addCourseEntryCard(COURSE_NETWORK);
         addCourseEntryCard(COURSE_SIGNAL_SYSTEM);
+        addCourseEntryCard(COURSE_XI_THOUGHT);
 
         scrollView.post(new Runnable() {
             @Override
@@ -3107,9 +3121,9 @@ public class MainActivity extends Activity {
         TextView courseTitle = text(courseName(courseId), 20, active ? BLUE : TEXT, true);
         courseTitle.setIncludeFontPadding(false);
         courseCard.addView(courseTitle, new LinearLayout.LayoutParams(-1, -2));
-        String features = COURSE_SIGNAL_SYSTEM.equals(normalizeCourseId(courseId))
-                ? "刷题 / 记题 / 错题 · 导图稍后补"
-                : "刷题 / 记题 / 错题 / 导图";
+        String features = courseHasMemoryCards(courseId)
+                ? "刷题 / 记题 / 错题 / 导图"
+                : "刷题 / 记题 / 错题";
         TextView courseMeta = text(assetQuestionCount(courseId) + " 题 · " + assetChapterCount(courseId)
                 + " 章 · " + features, 13, MUTED, false);
         courseMeta.setLineSpacing(dp(3), 1.0f);
@@ -3206,11 +3220,11 @@ public class MainActivity extends Activity {
         if (visibleCards.isEmpty()) {
             if (filterRowView != null) filterRowView.setVisibility(View.VISIBLE);
             stemView.setVisibility(View.VISIBLE);
-            stemView.setText(isSignalSystemCourse()
-                    ? "信号与系统导图暂未生成"
-                    : "当前没有可显示的思维导图");
+            stemView.setText(currentCourseHasMemoryCards()
+                    ? "当前没有可显示的思维导图"
+                    : currentCourseName() + "导图暂未生成");
             progressPeekView.setText("0/0");
-            metaView.setText(isSignalSystemCourse() ? "先用刷题 / 记题 / 错题复习" : "请重新选择章节");
+            metaView.setText(currentCourseHasMemoryCards() ? "请重新选择章节" : "先用刷题 / 记题 / 错题复习");
             return;
         }
         if (currentCardIndex < 0) currentCardIndex = 0;

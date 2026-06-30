@@ -1,4 +1,9 @@
-# v2.10.47
+# v2.10.48
+
+- 新增“习近平新时代中国特色社会主义思想概论”课程：首页可直接切换进入。
+- 从 QQCLI 收到的 `习思想2026版练习题(3)(1).docx` 导入 441 题：单选 269、多选 142、大题 30。
+- 每题写入答案、快速做题解析和知识点详解；大题可点“查看参考答案”并自评加入错题本。
+- 新增 `tools/import_xi_thought_course.py`，后续可从同类 Word 题库重新生成 `xi_thought_questions.json`。
 
 - Auto release after fix: Quiz: add temporary pinch zoom
 - Auto release after fix: Signal: polish transparent formula images
