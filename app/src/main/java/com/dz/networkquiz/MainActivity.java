@@ -124,6 +124,7 @@ public class MainActivity extends Activity {
     private static final String PREF_LAST_QUESTION_PREFIX = "last_question_";
     private static final String PREF_CURRENT_COURSE = "current_course";
     private static final String PREF_EXPORT_PROMPT_TEMPLATE = "export_prompt_template";
+    private static final String PREF_SUGGESTION_DRAFT = "suggestion_draft";
     private static final String PREF_FLOAT_EXPORT_X = "float_export_x";
     private static final String PREF_FLOAT_EXPORT_Y = "float_export_y";
     private static final String LEGACY_UPDATE_REPO_SLUG = "ZhiKong0/network-quiz-apk";
@@ -3166,27 +3167,57 @@ public class MainActivity extends Activity {
         addSettingsSectionTitle(optionList, "反馈建议", "");
 
         LinearLayout suggestCard = settingsCard();
-        TextView intro = text("复制或分享下面的模板，把问题、截图情况和期望效果补上。", 14, MUTED, false);
+        TextView intro = text("把问题或想法写在这里，提交时会打开 GitHub 留言页并自动填好内容。", 14, MUTED, false);
         intro.setLineSpacing(dp(4), 1.0f);
         suggestCard.addView(intro, new LinearLayout.LayoutParams(-1, -2));
-        addSettingsActionCardButton(suggestCard, "复制建议模板", true, new View.OnClickListener() {
+
+        final EditText suggestionInput = new EditText(this);
+        suggestionInput.setTextColor(TEXT);
+        suggestionInput.setHintTextColor(MUTED);
+        suggestionInput.setTextSize(15);
+        suggestionInput.setSingleLine(false);
+        suggestionInput.setMinLines(6);
+        suggestionInput.setGravity(Gravity.TOP | Gravity.START);
+        suggestionInput.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        suggestionInput.setHint("写下你的建议、问题页面、题号、截图情况或期望效果");
+        suggestionInput.setText(prefs == null ? "" : prefs.getString(PREF_SUGGESTION_DRAFT, ""));
+        suggestionInput.setPadding(dp(12), dp(10), dp(12), dp(10));
+        suggestionInput.setBackground(roundedStrokeBackground(
+                THEME_LIGHT.equals(themeMode) ? Color.argb(246, 255, 255, 255) : Color.argb(132, 40, 46, 60),
+                THEME_LIGHT.equals(themeMode) ? Color.argb(86, 205, 214, 232) : Color.argb(48, 255, 255, 255),
+                12,
+                1
+        ));
+        LinearLayout.LayoutParams inputLp = new LinearLayout.LayoutParams(-1, -2);
+        inputLp.topMargin = dp(10);
+        suggestCard.addView(suggestionInput, inputLp);
+
+        addSettingsActionCardButton(suggestCard, "提交到 GitHub 留言", true, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                copyFeedbackTemplate();
+                submitSuggestionToGithub(suggestionInput.getText().toString());
             }
         });
-        addSettingsActionCardButton(suggestCard, "分享建议模板", false, new View.OnClickListener() {
+        addSettingsActionCardButton(suggestCard, "复制填写内容", false, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                shareFeedbackTemplate();
+                copySuggestionDraft(suggestionInput.getText().toString());
+            }
+        });
+        addSettingsActionCardButton(suggestCard, "分享建议文本", false, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                shareSuggestionDraft(suggestionInput.getText().toString());
             }
         });
         optionList.addView(suggestCard, new LinearLayout.LayoutParams(-1, -2));
 
         LinearLayout previewCard = settingsCard();
-        TextView previewTitle = text("模板预览", 14, BLUE, true);
+        TextView previewTitle = text("提交内容会附带这些上下文", 14, BLUE, true);
         previewCard.addView(previewTitle, new LinearLayout.LayoutParams(-1, -2));
-        TextView preview = text(buildFeedbackTemplate(), 13, TEXT, false);
+        TextView preview = text(buildFeedbackContext(), 13, TEXT, false);
         preview.setLineSpacing(dp(4), 1.0f);
         preview.setTextIsSelectable(true);
         LinearLayout.LayoutParams previewLp = new LinearLayout.LayoutParams(-1, -2);
@@ -5063,7 +5094,9 @@ public class MainActivity extends Activity {
                 "做题理由：", "判题理由：", "判断理由：",
                 "选择理由：", "关键理由：", "为什么选它：", "为什么这样判题：",
                 "原因：", "依据：", "本题判断：", "本题答案：", "本题填：",
-                "题眼：", "判断：", "答案：", "关键：", "错点：", "易错："
+                "题眼：", "判断：", "答案：", "关键：", "错点：", "易错：",
+                "本题重点：", "答案逻辑：", "答题主线：", "答题要点：",
+                "为什么这样答：", "关键答题点：", "复习抓手：", "本题压缩记忆："
         };
         for (String label : labels) {
             if (compact.startsWith("-**" + label + "**") || compact.startsWith("-" + label)) {
@@ -5080,7 +5113,9 @@ public class MainActivity extends Activity {
                 "做题理由：", "判题理由：", "判断理由：",
                 "选择理由：", "关键理由：", "为什么选它：", "为什么这样判题：",
                 "原因：", "依据：", "本题判断：", "本题答案：", "本题填：",
-                "题眼：", "判断：", "答案：", "关键：", "错点：", "易错："
+                "题眼：", "判断：", "答案：", "关键：", "错点：", "易错：",
+                "本题重点：", "答案逻辑：", "答题主线：", "答题要点：",
+                "为什么这样答：", "关键答题点：", "复习抓手：", "本题压缩记忆："
         };
         for (String label : labels) {
             if (compact.startsWith(label) || compact.startsWith("**" + label + "**")) {
@@ -6227,14 +6262,110 @@ public class MainActivity extends Activity {
         }
     }
 
-    private String buildFeedbackTemplate() {
+    private void submitSuggestionToGithub(String draft) {
+        String body = buildSuggestionIssueBody(draft);
+        if (body.trim().length() == 0) {
+            Toast.makeText(this, "先写一点建议内容再提交", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        saveSuggestionDraft(draft);
+        copyTextToClipboard("备考宝典反馈建议", body);
+        openUrl(buildGithubIssueUrl(body));
+        Toast.makeText(this, "已打开 GitHub 留言页，内容也已复制", Toast.LENGTH_LONG).show();
+    }
+
+    private void copySuggestionDraft(String draft) {
+        String body = buildSuggestionIssueBody(draft);
+        if (body.trim().length() == 0) {
+            Toast.makeText(this, "先写一点建议内容再复制", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        saveSuggestionDraft(draft);
+        copyTextToClipboard("备考宝典反馈建议", body);
+        Toast.makeText(this, "已复制建议内容", Toast.LENGTH_SHORT).show();
+    }
+
+    private void shareSuggestionDraft(String draft) {
+        try {
+            String body = buildSuggestionIssueBody(draft);
+            if (body.trim().length() == 0) {
+                Toast.makeText(this, "先写一点建议内容再分享", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            saveSuggestionDraft(draft);
+            copyTextToClipboard("备考宝典反馈建议", body);
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType("text/plain");
+            send.putExtra(Intent.EXTRA_SUBJECT, suggestionIssueTitle(draft));
+            send.putExtra(Intent.EXTRA_TEXT, body);
+            startActivity(Intent.createChooser(send, "发送反馈建议"));
+            Toast.makeText(this, "已复制建议，并打开分享", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "分享建议失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void copyTextToClipboard(String label, String value) {
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (clipboard != null) {
+            clipboard.setPrimaryClip(ClipData.newPlainText(label, value));
+        }
+    }
+
+    private void saveSuggestionDraft(String draft) {
+        if (prefs == null) return;
+        prefs.edit().putString(PREF_SUGGESTION_DRAFT, draft == null ? "" : draft).apply();
+    }
+
+    private String buildSuggestionIssueBody(String draft) {
+        String trimmed = draft == null ? "" : draft.trim();
+        if (trimmed.length() == 0) return "";
         StringBuilder sb = new StringBuilder();
-        sb.append("# 备考宝典反馈建议\n\n");
+        sb.append("## 用户留言\n\n");
+        sb.append(trimmed).append("\n\n");
+        sb.append(buildFeedbackContext());
+        return sb.toString();
+    }
+
+    private String buildFeedbackContext() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("## App 上下文\n\n");
         sb.append("- App 版本：").append(currentVersionSummary()).append("\n");
         sb.append("- 当前课程：").append(currentCourseName()).append("\n");
         sb.append("- 当前页面：").append(currentPageSummary()).append("\n");
         sb.append("- 当前筛选：").append(activeFilterText()).append("\n");
-        sb.append("- 当前题目：").append(currentQuestionSummaryForFeedback()).append("\n\n");
+        sb.append("- 当前题目：").append(currentQuestionSummaryForFeedback()).append("\n");
+        return sb.toString();
+    }
+
+    private String buildGithubIssueUrl(String body) {
+        String repo = DEFAULT_UPDATE_REPO_SLUG;
+        String title = suggestionIssueTitle(body);
+        String issueBody = body == null ? "" : body;
+        if (issueBody.length() > 3800) {
+            issueBody = issueBody.substring(0, 3800) + "\n\n（内容较长，已截断；完整内容已复制到剪贴板。）";
+        }
+        return "https://github.com/" + repo + "/issues/new"
+                + "?title=" + encodeUrlQueryParam(title)
+                + "&body=" + encodeUrlQueryParam(issueBody);
+    }
+
+    private String suggestionIssueTitle(String value) {
+        String text = value == null ? "" : value.trim();
+        if (text.startsWith("## 用户留言")) {
+            int marker = text.indexOf("\n\n");
+            if (marker >= 0) text = text.substring(marker + 2).trim();
+        }
+        String firstLine = text.split("\\r?\\n", 2)[0].trim();
+        if (firstLine.length() == 0) firstLine = "反馈建议";
+        if (firstLine.length() > 34) firstLine = firstLine.substring(0, 34) + "...";
+        return "反馈建议：" + firstLine;
+    }
+
+    private String buildFeedbackTemplate() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("# 备考宝典反馈建议\n\n");
+        sb.append(buildFeedbackContext()).append("\n");
         sb.append("## 问题描述\n\n");
         sb.append("请在这里写：哪里不好用、哪里显示不对、或你希望新增什么。\n\n");
         sb.append("## 截图情况\n\n");
@@ -7999,6 +8130,15 @@ public class MainActivity extends Activity {
             return URLEncoder.encode(safe, "UTF-8").replace("+", "%20");
         } catch (Exception ignored) {
             return safe.replace(" ", "%20");
+        }
+    }
+
+    private String encodeUrlQueryParam(String value) {
+        String safe = value == null ? "" : value;
+        try {
+            return URLEncoder.encode(safe, "UTF-8");
+        } catch (Exception ignored) {
+            return safe.replace(" ", "+");
         }
     }
 
