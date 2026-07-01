@@ -7846,103 +7846,10 @@ public class MainActivity extends Activity {
                 logUpdateDebug("fast metadata satisfied update check for " + info.displayVersion());
                 return info;
             }
+            throw new UpdateCheckException("ghfast 镜像更新元数据缺少版本号或下载地址");
         } catch (UpdateCheckException fastError) {
-            info.validationNotes.add("加速更新元数据读取失败，已回退到 GitHub Release：" + fastError.userMessage);
+            throw new UpdateCheckException("读取 ghfast 镜像更新元数据失败：" + fastError.userMessage);
         }
-
-        JSONObject repo = fetchGithubRepoInfo();
-        JSONObject release = fetchLatestReleaseJson();
-        info.repoTitle = nonEmpty(repo.optString("full_name", ""), info.repoTitle);
-        info.releaseTitle = nonEmpty(release.optString("name", ""), nonEmpty(release.optString("tag_name", ""), info.releaseTitle));
-        info.versionName = nonEmpty(normalizeVersionName(release.optString("tag_name", "")), info.versionName);
-        info.notes = nonEmpty(release.optString("body", ""), info.notes);
-        info.htmlUrl = nonEmpty(release.optString("html_url", ""), nonEmpty(info.htmlUrl, buildGithubReleasePageUrl(repoSlug)));
-        info.publishedAt = nonEmpty(release.optString("published_at", ""), info.publishedAt);
-
-        JSONArray assets = release.optJSONArray("assets");
-        JSONObject metadataAsset = null;
-        List<JSONObject> apkAssets = new ArrayList<>();
-        if (assets != null) {
-            for (int i = 0; i < assets.length(); i++) {
-                JSONObject asset = assets.optJSONObject(i);
-                if (asset == null) continue;
-                String name = asset.optString("name", "");
-                if (UPDATE_METADATA_NAME.equalsIgnoreCase(name)) {
-                    metadataAsset = asset;
-                } else if (metadataAsset == null && LEGACY_UPDATE_METADATA_NAME.equalsIgnoreCase(name)) {
-                    metadataAsset = asset;
-                }
-                if (name.toLowerCase(Locale.US).endsWith(".apk")) {
-                    apkAssets.add(asset);
-                }
-            }
-        }
-
-        if (metadataAsset != null) {
-            JSONObject meta = null;
-            try {
-                meta = readGithubJsonObject(
-                        metadataAsset.optString("browser_download_url", ""),
-                        "Release 缺少可读取的更新元数据文件",
-                        "读取 Release 更新元数据失败"
-                );
-            } catch (UpdateCheckException metadataError) {
-                info.validationNotes.add("更新元数据读取失败，已回退到直接识别 APK：" + metadataError.userMessage);
-            }
-            if (meta != null) {
-                info.hasMetadataAsset = true;
-                String packageName = meta.optString("packageName", "").trim();
-                if (packageName.length() > 0 && !getPackageName().equals(packageName)) {
-                    throw new UpdateCheckException("这个 Release 不是当前 App 的更新包（包名不匹配）");
-                }
-                info.versionName = nonEmpty(normalizeVersionName(meta.optString("versionName", "")), info.versionName);
-                info.versionCode = meta.optInt("versionCode", info.versionCode);
-                info.apkName = nonEmpty(meta.optString("apkFileName", ""), info.apkName);
-                info.downloadUrl = nonEmpty(meta.optString("apkDownloadUrl", ""), info.downloadUrl);
-                info.notes = nonEmpty(meta.optString("releaseNotes", ""), info.notes);
-                info.htmlUrl = nonEmpty(meta.optString("releaseHtmlUrl", ""), info.htmlUrl);
-                info.assetSize = meta.optLong("apkSize", info.assetSize);
-                JSONArray metaCandidates = meta.optJSONArray("apkDownloadCandidates");
-                if (metaCandidates != null) {
-                    for (int i = 0; i < metaCandidates.length(); i++) {
-                        appendDownloadCandidate(info.downloadCandidates, metaCandidates.optString(i, ""));
-                    }
-                }
-            }
-        } else {
-            info.validationNotes.add("Release 未附带更新元数据，当前会退回到直接识别 APK。");
-        }
-
-        JSONObject apkAsset = pickPreferredApkAsset(apkAssets, info.apkName);
-        if (apkAsset != null) {
-            info.apkName = nonEmpty(info.apkName, apkAsset.optString("name", ""));
-            info.downloadUrl = nonEmpty(info.downloadUrl, apkAsset.optString("browser_download_url", ""));
-            info.assetSize = apkAsset.optLong("size", 0L);
-        }
-        appendDownloadCandidate(info.downloadCandidates, buildGhfastMirrorUrl(info.downloadUrl));
-        appendDownloadCandidate(info.downloadCandidates, info.downloadUrl);
-        appendDownloadCandidate(info.downloadCandidates, buildGhfastMirrorUrl(buildGithubLatestDownloadUrl(repoSlug, info.apkName)));
-        appendDownloadCandidate(info.downloadCandidates, buildGithubLatestDownloadUrl(repoSlug, info.apkName));
-        if (info.versionName.length() > 0) {
-            appendDownloadCandidate(info.downloadCandidates, buildGhfastMirrorUrl(buildGithubTagDownloadUrl(repoSlug, info.versionName, info.apkName)));
-            appendDownloadCandidate(info.downloadCandidates, buildGithubTagDownloadUrl(repoSlug, info.versionName, info.apkName));
-        }
-        info.apkAssetCount = apkAssets.size();
-        if (info.apkAssetCount > 1) {
-            info.validationNotes.add("这个 Release 包含多个 APK，当前会优先挑选最像正式包的那个。");
-        }
-
-        if (info.versionName.length() == 0 && info.versionCode <= 0) {
-            throw new UpdateCheckException("这个 Release 缺少可识别的版本号，请检查 tag 或更新元数据");
-        }
-        if (info.downloadUrl.length() == 0) {
-            throw new UpdateCheckException("这个 Release 里没有找到 APK 安装包");
-        }
-        if (!info.hasMetadataAsset) {
-            info.validationNotes.add("未提供更新元数据文件，安装前无法提前核验 APK 包名。");
-        }
-        finalizeUpdateDownloadCandidates(repoSlug, info);
-        return info;
     }
 
     private boolean hasUsableFastMetadata(UpdateInfo info) {
@@ -8176,6 +8083,7 @@ public class MainActivity extends Activity {
         if (out == null) return;
         String normalized = candidate == null ? "" : candidate.trim();
         if (normalized.length() == 0) return;
+        if (isGithubOriginalDownloadUrl(normalized)) return;
         if (!out.contains(normalized)) {
             out.add(normalized);
         }
@@ -8183,9 +8091,15 @@ public class MainActivity extends Activity {
 
     private void appendDownloadCandidateWithMirrors(List<String> out, String candidate) {
         String direct = unwrapUpdateMirrorUrl(candidate);
-        appendDownloadCandidate(out, direct);
-        appendDownloadCandidate(out, buildGhProxyMirrorUrl(direct));
         appendDownloadCandidate(out, buildGhfastMirrorUrl(direct));
+    }
+
+    private boolean isGithubOriginalDownloadUrl(String value) {
+        if (value == null) return false;
+        String trimmed = value.trim().toLowerCase(Locale.US);
+        return trimmed.startsWith("https://github.com/")
+                && trimmed.contains("/releases/")
+                && trimmed.contains("/download/");
     }
 
     private JSONObject fetchFastUpdateMetadata(String repoSlug) throws UpdateCheckException {
@@ -8194,16 +8108,8 @@ public class MainActivity extends Activity {
         List<String> urls = new ArrayList<>();
         List<String> errorMessages = new ArrayList<>();
         for (String metadataName : updateMetadataNames()) {
-            urls.add(buildGithubLatestMetadataUrl(repoSlug, metadataName));
-            errorMessages.add("读取 Release 元数据失败");
-            urls.add(buildGhProxyLatestMetadataUrl(repoSlug, metadataName));
-            errorMessages.add("读取 gh-proxy Release 元数据失败");
             urls.add(buildGhfastLatestMetadataUrl(repoSlug, metadataName));
             errorMessages.add("读取 ghfast Release 元数据失败");
-            urls.add(buildGithubRawUpdateMetadataUrl(repoSlug, metadataName));
-            errorMessages.add("读取原始更新元数据失败");
-            urls.add(buildJsDelivrUpdateMetadataUrl(repoSlug, metadataName));
-            errorMessages.add("读取 jsDelivr 更新元数据失败");
         }
         for (int i = 0; i < urls.size(); i++) {
             try {

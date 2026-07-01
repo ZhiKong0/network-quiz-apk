@@ -1,20 +1,16 @@
 {
   "packageName": "com.dz.networkquiz",
-  "versionCode": 88,
-  "versionName": "2.10.63",
+  "versionCode": 89,
+  "versionName": "2.10.64",
   "apkFileName": "exam-prep-handbook.apk",
-  "apkDownloadUrl": "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.63/exam-prep-handbook.apk",
+  "apkDownloadUrl": "https://ghfast.top/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.64/exam-prep-handbook.apk",
   "apkDownloadCandidates": [
-    "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.63/exam-prep-handbook.apk",
-    "https://gh-proxy.com/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.63/exam-prep-handbook.apk",
-    "https://ghfast.top/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.63/exam-prep-handbook.apk",
-    "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/latest/download/exam-prep-handbook.apk",
-    "https://gh-proxy.com/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/latest/download/exam-prep-handbook.apk",
+    "https://ghfast.top/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.64/exam-prep-handbook.apk",
     "https://ghfast.top/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/latest/download/exam-prep-handbook.apk"
   ],
-  "releaseHtmlUrl": "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/tag/v2.10.63",
-  "releaseNotes": "# v2.10.63\n\n- 为“习近平思想”课程新增章节思维导图/知识点大全。\n- 导图覆盖全部 441 道习思想题，按 14 个讲次组织，每讲一张总览导图。\n- 每章导图包含主线定位、核心知识点、必背标准词、易混辨析、题眼线索和逐题覆盖，方便在 App 底部“导图”入口集中复习。\n- 课程首页现在将“习近平思想”显示为“刷题 / 记题 / 错题 / 导图”，不再提示导图暂未生成。\n- 导图导出内容会按当前课程名和专属导图资产生成，避免沿用计算机网络的导图说明。",
-  "apkSize": 34861665,
-  "sha256": "aea9394c3819e251d26a6d12afb04e3ebfe7d7cd484bc12e7e729a49e6c4f3bb",
-  "generatedAt": "2026-07-01T18:10:47.678061+00:00"
+  "releaseHtmlUrl": "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/latest",
+  "releaseNotes": "# v2.10.64\n\n- 修复 App 内置更新下载源：APK 下载只使用 `ghfast` 镜像，不再尝试 GitHub 原始下载链接。\n- 更新元数据读取同样优先固定为 `ghfast` Release 资产镜像，避免 GitHub 直连卡住导致“处理中”。\n- 更新 JSON 生成逻辑同步调整，`apkDownloadUrl` 和 `apkDownloadCandidates` 只写入 `ghfast` 镜像地址。\n- 旧元数据里如果仍包含 GitHub 原链，App 会在整理下载候选时过滤掉原链，只保留 ghfast 镜像。",
+  "apkSize": 34857569,
+  "sha256": "564a65d310346287299e906122229514633c1a0b17168a118106fcf806154371",
+  "generatedAt": "2026-07-01T18:20:21.236983+00:00"
 }

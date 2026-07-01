@@ -61,11 +61,6 @@ def unwrap_update_mirror_url(url: str) -> str:
     return value
 
 
-def gh_proxy_url(url: str) -> str:
-    value = unwrap_update_mirror_url(url)
-    return f"https://gh-proxy.com/{value}" if value else ""
-
-
 def ghfast_url(url: str) -> str:
     value = unwrap_update_mirror_url(url)
     return f"https://ghfast.top/{value}" if value else ""
@@ -79,8 +74,6 @@ def append_download_candidate(candidates: list[str], url: str) -> None:
 
 def append_download_candidate_with_mirrors(candidates: list[str], url: str) -> None:
     direct = unwrap_update_mirror_url(url)
-    append_download_candidate(candidates, direct)
-    append_download_candidate(candidates, gh_proxy_url(direct))
     append_download_candidate(candidates, ghfast_url(direct))
 
 
