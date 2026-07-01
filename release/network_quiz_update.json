@@ -1,20 +1,20 @@
 {
   "packageName": "com.dz.networkquiz",
-  "versionCode": 87,
-  "versionName": "2.10.62",
+  "versionCode": 88,
+  "versionName": "2.10.63",
   "apkFileName": "exam-prep-handbook.apk",
-  "apkDownloadUrl": "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.62/exam-prep-handbook.apk",
+  "apkDownloadUrl": "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.63/exam-prep-handbook.apk",
   "apkDownloadCandidates": [
-    "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.62/exam-prep-handbook.apk",
-    "https://gh-proxy.com/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.62/exam-prep-handbook.apk",
-    "https://ghfast.top/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.62/exam-prep-handbook.apk",
+    "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.63/exam-prep-handbook.apk",
+    "https://gh-proxy.com/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.63/exam-prep-handbook.apk",
+    "https://ghfast.top/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.63/exam-prep-handbook.apk",
     "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/latest/download/exam-prep-handbook.apk",
     "https://gh-proxy.com/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/latest/download/exam-prep-handbook.apk",
     "https://ghfast.top/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/latest/download/exam-prep-handbook.apk"
   ],
-  "releaseHtmlUrl": "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/tag/v2.10.62",
-  "releaseNotes": "# v2.10.62\n\n- Auto release after fix: Update data structures PTA review bank\n- 替换“数据结构”课程题库为李俊老师 2026-07-01 发布的 3 套 PTA 复习练习。\n- 新题库共 239 题：判断题 120、单选题 100、函数题 4、编程题 15。\n- 两套“练习题6”按来源保留题号标签；客观题答案按旧题库题干/正确选项自动对齐，并补齐复杂度、队列、列表等少量新顺序题的答案。\n- 19 道函数题/编程题补充 Python 参考代码和直接解析，重点讲清输入输出、分支、循环、递归、类与栈匹配。\n- 新增可复跑导入脚本和报告，后续 PTA 原始抓取数据可重新生成 App 题库。",
-  "apkSize": 34836917,
-  "sha256": "fe7af37478b005a59092933fdffda4c20739f480400c05584c81acae9a57e40e",
-  "generatedAt": "2026-07-01T14:39:51.009004+00:00"
+  "releaseHtmlUrl": "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/latest",
+  "releaseNotes": "# v2.10.63\n\n- 为“习近平思想”课程新增章节思维导图/知识点大全。\n- 导图覆盖全部 441 道习思想题，按 14 个讲次组织，每讲一张总览导图。\n- 每章导图包含主线定位、核心知识点、必背标准词、易混辨析、题眼线索和逐题覆盖，方便在 App 底部“导图”入口集中复习。\n- 课程首页现在将“习近平思想”显示为“刷题 / 记题 / 错题 / 导图”，不再提示导图暂未生成。\n- 导图导出内容会按当前课程名和专属导图资产生成，避免沿用计算机网络的导图说明。",
+  "apkSize": 34861665,
+  "sha256": "062837e6224ad7fc9ae586162d708330aaec8f5cccc447571fdefd56a729c9a1",
+  "generatedAt": "2026-07-01T18:06:52.857051+00:00"
 }

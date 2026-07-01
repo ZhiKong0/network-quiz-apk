@@ -693,7 +693,9 @@ public class MainActivity extends Activity {
 
     private boolean courseHasMemoryCards(String courseId) {
         String normalized = normalizeCourseId(courseId);
-        return COURSE_NETWORK.equals(normalized) || COURSE_DATA_STRUCTURES.equals(normalized);
+        return COURSE_NETWORK.equals(normalized)
+                || COURSE_XI_THOUGHT.equals(normalized)
+                || COURSE_DATA_STRUCTURES.equals(normalized);
     }
 
     private boolean currentCourseHasMemoryCards() {
@@ -714,12 +716,14 @@ public class MainActivity extends Activity {
 
     private String memoryCardsAssetName(String courseId) {
         String normalized = normalizeCourseId(courseId);
+        if (COURSE_XI_THOUGHT.equals(normalized)) return "xi_thought_chapter_cards.json";
         if (COURSE_DATA_STRUCTURES.equals(normalized)) return "data_structures_chapter_cards.json";
         return "chapter_cards.json";
     }
 
     private String memoryCardOverridesAssetName(String courseId) {
         String normalized = normalizeCourseId(courseId);
+        if (COURSE_XI_THOUGHT.equals(normalized)) return "xi_thought_chapter_card_overrides.json";
         if (COURSE_DATA_STRUCTURES.equals(normalized)) return "data_structures_chapter_card_overrides.json";
         return "chapter_card_overrides.json";
     }
@@ -838,8 +842,11 @@ public class MainActivity extends Activity {
                         jsonStringList(obj.optJSONArray("mustRemember")),
                         jsonStringList(obj.optJSONArray("traps")),
                         jsonStringList(obj.optJSONArray("questionTips")),
-                        "",
-                        ""));
+                        obj.optString("frontMarkdown", ""),
+                        obj.optString("backMarkdown", ""),
+                        false,
+                        obj.optString("mindMapTitle", ""),
+                        jsonMindMapNodes(obj.optJSONArray("mindMapNodes"))));
             }
             applyMemoryCardOverrides();
             ensureAllCardsHaveMindMaps();
@@ -6689,11 +6696,11 @@ public class MainActivity extends Activity {
         try {
             String md = buildAllChapterCardsMarkdown();
             shareMarkdownFile(
-                    "计算机网络_章节思维导图全集.md",
-                    "计算机网络章节思维导图全集",
+                    safeExportFileName(currentCourseName() + "_章节思维导图全集.md"),
+                    currentCourseName() + "章节思维导图全集",
                     "分享全部章节思维导图",
                     md,
-                    "计算机网络章节思维导图全集 Markdown 文件见附件。",
+                    currentCourseName() + "章节思维导图全集 Markdown 文件见附件。",
                     "已生成全部章节思维导图，并打开分享"
             );
         } catch (Exception e) {
@@ -6705,11 +6712,12 @@ public class MainActivity extends Activity {
         if (!allMemoryCards.isEmpty()) {
             List<String> labels = allCardLabels();
             StringBuilder sb = new StringBuilder();
-            sb.append("# 备考宝典：计算机网络章节思维导图全集\n\n");
+            sb.append("# 备考宝典：").append(currentCourseName()).append("章节思维导图全集\n\n");
             sb.append("- 覆盖题目：").append(labels.size()).append(" 题\n");
             sb.append("- 覆盖章节：").append(cardChapterList().size()).append(" 章\n");
             sb.append("- 覆盖知识点导图：").append(allMemoryCards.size()).append(" 组\n");
-            sb.append("- 生成方式：使用 App 内置 `chapter_cards.json`，每组导图都包含底层知识点、必背标准词/数字、易错开关和逐题覆盖线索。\n\n");
+            sb.append("- 生成方式：使用 App 内置 `").append(memoryCardsAssetName(currentCourseId))
+                    .append("`，每组导图都包含底层知识点、必背标准词/数字、易错开关和逐题覆盖线索。\n\n");
             sb.append("## 覆盖总览\n\n");
             for (String chapter : cardChapterList()) {
                 List<MemoryCard> cards = memoryCardsInChapter(chapter);
@@ -6729,7 +6737,7 @@ public class MainActivity extends Activity {
             return sb.toString();
         }
         StringBuilder sb = new StringBuilder();
-        sb.append("# 计算机网络考试练习：章节思维导图全集\n\n");
+        sb.append("# ").append(currentCourseName()).append("考试练习：章节思维导图全集\n\n");
         sb.append("- 覆盖题目：").append(allQuestions.size()).append(" 题\n");
         sb.append("- 覆盖章节：").append(chapterList().size()).append(" 章\n");
         sb.append("- 覆盖知识点：").append(knowledgePairCount(allQuestions)).append(" 个\n");
@@ -6849,7 +6857,8 @@ public class MainActivity extends Activity {
         if (!cards.isEmpty()) {
             sb.append("- 本章总地图：").append(cards.get(0).chapterMap).append("\n");
         }
-        sb.append("- 生成方式：使用 App 内置 `chapter_cards.json`，逐题覆盖线索覆盖本章全部题号。\n\n");
+        sb.append("- 生成方式：使用 App 内置 `").append(memoryCardsAssetName(currentCourseId))
+                .append("`，逐题覆盖线索覆盖本章全部题号。\n\n");
         int index = 1;
         for (MemoryCard card : cards) {
             sb.append(buildMemoryCardMarkdown(card, index++));
