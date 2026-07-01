@@ -140,9 +140,11 @@ public class MainActivity extends Activity {
     private static final String COURSE_NETWORK = "network";
     private static final String COURSE_SIGNAL_SYSTEM = "signal_system";
     private static final String COURSE_XI_THOUGHT = "xi_thought";
+    private static final String COURSE_DATA_STRUCTURES = "data_structures_pta";
     private static final String COURSE_NETWORK_NAME = "计算机网络";
     private static final String COURSE_SIGNAL_SYSTEM_NAME = "信号与系统";
     private static final String COURSE_XI_THOUGHT_NAME = "习近平思想";
+    private static final String COURSE_DATA_STRUCTURES_NAME = "数据结构";
     private static final String DEFAULT_UPDATE_REPO_SLUG = "ZhiKong0/exam-prep-handbook-apk";
     private static final String TAG_MARKDOWN_TABLE_SCROLL = "markdown_table_scroll";
     private static final String TAG_MIND_MAP_BOARD = "mind_map_board";
@@ -669,6 +671,7 @@ public class MainActivity extends Activity {
     private String normalizeCourseId(String value) {
         if (COURSE_SIGNAL_SYSTEM.equals(value)) return COURSE_SIGNAL_SYSTEM;
         if (COURSE_XI_THOUGHT.equals(value)) return COURSE_XI_THOUGHT;
+        if (COURSE_DATA_STRUCTURES.equals(value)) return COURSE_DATA_STRUCTURES;
         return COURSE_NETWORK;
     }
 
@@ -676,6 +679,7 @@ public class MainActivity extends Activity {
         String normalized = normalizeCourseId(courseId);
         if (COURSE_SIGNAL_SYSTEM.equals(normalized)) return COURSE_SIGNAL_SYSTEM_NAME;
         if (COURSE_XI_THOUGHT.equals(normalized)) return COURSE_XI_THOUGHT_NAME;
+        if (COURSE_DATA_STRUCTURES.equals(normalized)) return COURSE_DATA_STRUCTURES_NAME;
         return COURSE_NETWORK_NAME;
     }
 
@@ -688,7 +692,8 @@ public class MainActivity extends Activity {
     }
 
     private boolean courseHasMemoryCards(String courseId) {
-        return COURSE_NETWORK.equals(normalizeCourseId(courseId));
+        String normalized = normalizeCourseId(courseId);
+        return COURSE_NETWORK.equals(normalized) || COURSE_DATA_STRUCTURES.equals(normalized);
     }
 
     private boolean currentCourseHasMemoryCards() {
@@ -703,7 +708,20 @@ public class MainActivity extends Activity {
         String normalized = normalizeCourseId(courseId);
         if (COURSE_SIGNAL_SYSTEM.equals(normalized)) return "signal_system_questions.json";
         if (COURSE_XI_THOUGHT.equals(normalized)) return "xi_thought_questions.json";
+        if (COURSE_DATA_STRUCTURES.equals(normalized)) return "data_structures_questions.json";
         return "questions.json";
+    }
+
+    private String memoryCardsAssetName(String courseId) {
+        String normalized = normalizeCourseId(courseId);
+        if (COURSE_DATA_STRUCTURES.equals(normalized)) return "data_structures_chapter_cards.json";
+        return "chapter_cards.json";
+    }
+
+    private String memoryCardOverridesAssetName(String courseId) {
+        String normalized = normalizeCourseId(courseId);
+        if (COURSE_DATA_STRUCTURES.equals(normalized)) return "data_structures_chapter_card_overrides.json";
+        return "chapter_card_overrides.json";
     }
 
     private String coursePrefName(String base) {
@@ -801,7 +819,7 @@ public class MainActivity extends Activity {
             return;
         }
         try {
-            String json = readAssetText("chapter_cards.json");
+            String json = readAssetText(memoryCardsAssetName(currentCourseId));
             JSONArray arr = new JSONArray(json);
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject obj = arr.getJSONObject(i);
@@ -832,7 +850,7 @@ public class MainActivity extends Activity {
 
     private void applyMemoryCardOverrides() {
         try {
-            String json = readAssetText("chapter_card_overrides.json");
+            String json = readAssetText(memoryCardOverridesAssetName(currentCourseId));
             JSONArray arr = new JSONArray(json);
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject obj = arr.getJSONObject(i);
@@ -3093,6 +3111,7 @@ public class MainActivity extends Activity {
         addCourseEntryCard(COURSE_NETWORK);
         addCourseEntryCard(COURSE_SIGNAL_SYSTEM);
         addCourseEntryCard(COURSE_XI_THOUGHT);
+        addCourseEntryCard(COURSE_DATA_STRUCTURES);
 
         scrollView.post(new Runnable() {
             @Override
