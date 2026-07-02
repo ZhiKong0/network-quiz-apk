@@ -3069,7 +3069,7 @@ public class MainActivity extends Activity {
         Question q = currentQuestion();
         stemView.setTextSize(questionStemTextSize(q));
         persistStudyProgress(q.label);
-        if (isCodeAnswerQuestion(q) && essayTopActionList != null && !rememberMode) {
+        if (isEssayQuestion(q) && !isCodeAnswerQuestion(q) && essayTopActionList != null && !rememberMode) {
             renderEssayActionsInto(q, essayTopActionList);
             essayTopActionList.setVisibility(View.VISIBLE);
         }
@@ -3102,9 +3102,7 @@ public class MainActivity extends Activity {
         if ("blank".equals(q.type)) {
             renderBlankInputs(q);
         } else if (isEssayQuestion(q)) {
-            if (!isCodeAnswerQuestion(q)) {
-                renderEssayActions(q);
-            }
+            renderEssayActions(q);
         } else {
             for (Option opt : q.options) {
                 addOptionView(q, opt);
@@ -4189,6 +4187,14 @@ public class MainActivity extends Activity {
             mathStemContainer.removeAllViews();
             mathStemContainer.setVisibility(View.GONE);
         }
+        if (isCodeAnswerQuestion(q)) {
+            stemView.setText("");
+            stemView.setVisibility(View.GONE);
+            if (mathStemContainer != null) {
+                renderMarkdown(mathStemContainer, buildCodeQuestionStemMarkdown(q));
+            }
+            return;
+        }
         if (q != null && !q.stemImages.isEmpty()) {
             stemView.setText("");
             stemView.setVisibility(View.GONE);
@@ -4196,6 +4202,221 @@ public class MainActivity extends Activity {
         }
         stemView.setVisibility(View.VISIBLE);
         stemView.setText(inlineMarkdown(q == null ? "" : q.stem));
+    }
+
+    private String buildCodeQuestionStemMarkdown(Question q) {
+        String type = q == null || q.typeName == null ? "大题" : q.typeName.trim();
+        String stem = q == null || q.stem == null ? "" : q.stem;
+        String cleaned = normalizeCodeQuestionStemText(stem);
+        List<ProblemSection> sections = splitCodeProblemSections(cleaned);
+        StringBuilder sb = new StringBuilder();
+        if (q != null && q.label != null && q.label.trim().length() > 0) {
+            sb.append("# ").append(q.label.trim()).append(" · ").append(type.length() == 0 ? "大题" : type).append("\n\n");
+        } else {
+            sb.append("# ").append(type.length() == 0 ? "大题" : type).append("\n\n");
+        }
+        if (q != null && q.knowledge != null && q.knowledge.trim().length() > 0) {
+            sb.append("- **考点：** ").append(q.knowledge.trim()).append("\n");
+        }
+        sb.append("\n");
+
+        for (ProblemSection section : sections) {
+            if (section.title.length() == 0 && section.body.toString().trim().length() == 0) continue;
+            String title = section.title.length() == 0 ? "题目描述" : section.title;
+            sb.append("## ").append(title).append("\n\n");
+            String body = cleanupSectionBody(section.body.toString());
+            if (body.length() == 0) {
+                continue;
+            }
+            if (shouldRenderCodeSection(title, body)) {
+                sb.append("```").append(codeFenceLanguage(title, body)).append("\n")
+                        .append(stripPtaLineNumbers(body)).append("\n```\n\n");
+            } else {
+                appendReadableParagraphs(sb, body);
+                sb.append("\n");
+            }
+        }
+        return sb.toString().trim();
+    }
+
+    private String normalizeCodeQuestionStemText(String value) {
+        String text = value == null ? "" : value.replace("\r\n", "\n").replace('\r', '\n');
+        text = text.replace('\u00A0', ' ');
+        text = text.replaceAll("(?m)^\\s*(复制内容|格式|全屏|全屏浏览|切换布局)\\s*$", "");
+        text = text.replaceAll("(?m)^\\s*分数\\s+\\d+(?:\\.\\d+)?\\s*$", "");
+        text = text.replaceAll("(?m)^\\s*(作者|单位)\\s+.*$", "");
+        text = text.replaceAll("(?m)^\\s*\\[\\s*(?:Python|python|in|out)\\s*\\]\\s*$", "");
+        text = text.replaceAll("(?m)^\\s*/\\*\\s*请在这里填写答案\\s*\\*/\\s*$", "");
+        text = text.replaceAll("(?m)^\\s*#\\s*请在这里填写.*$", "");
+        text = text.replace("#  请在这里填写Pet类的定义", "# 请在这里填写 Pet 类的定义");
+        text = text.replaceAll("(?m)^\\s*在这里给出一组输入。例如：\\s*$", "");
+        text = text.replaceAll("(?m)^\\s*在这里给出相应的输出。例如：\\s*$", "");
+        text = text.replaceAll("(?m)^\\s*在这里给出函数被调用进行测试的例子。例如：\\s*$", "");
+        text = text.replaceAll("(?m)^\\s*代码长度限制\\s+.*$", "");
+        text = text.replaceAll("(?m)^\\s*时间限制\\s+.*$", "");
+        text = text.replaceAll("(?m)^\\s*内存限制\\s+.*$", "");
+        text = text.replaceAll("(?m)^\\s*栈限制\\s+.*$", "");
+        text = text.replaceAll("(?m)^\\s*Python \\(python3\\)\\s*$", "");
+        text = text.replaceAll("\\n{3,}", "\n\n");
+        return text.trim();
+    }
+
+    private List<ProblemSection> splitCodeProblemSections(String text) {
+        List<ProblemSection> sections = new ArrayList<>();
+        ProblemSection current = new ProblemSection("题目描述");
+        sections.add(current);
+        String[] lines = (text == null ? "" : text).split("\n");
+        for (String raw : lines) {
+            String line = raw == null ? "" : raw.trim();
+            String heading = codeQuestionHeading(line);
+            if (heading.length() > 0) {
+                current = new ProblemSection(heading);
+                sections.add(current);
+                continue;
+            }
+            if (current.body.length() > 0) current.body.append('\n');
+            current.body.append(raw == null ? "" : raw);
+        }
+        List<ProblemSection> compact = new ArrayList<>();
+        for (ProblemSection section : sections) {
+            section.body = new StringBuilder(cleanupSectionBody(section.body.toString()));
+            if (section.body.length() > 0) {
+                compact.add(section);
+            }
+        }
+        return compact;
+    }
+
+    private String codeQuestionHeading(String line) {
+        if (line == null) return "";
+        String value = line.trim();
+        if (value.length() == 0) return "";
+        String normalized = value.replace('：', ':').replaceAll("^#+\\s*", "").trim();
+        while (normalized.endsWith(":")) {
+            normalized = normalized.substring(0, normalized.length() - 1).trim();
+        }
+        String compact = normalized.replace(" ", "").replace("　", "");
+        if (compact.matches("^输入样例\\d*$")) return normalized;
+        if (compact.matches("^输出样例\\d*$")) return normalized;
+        if ("输入".equals(compact)) return "输入样例";
+        if ("输出".equals(compact)) return "输出样例";
+        if ("函数接口".equals(compact) || "Pet类定义".equals(compact)) return "函数接口定义";
+        String[] headings = new String[] {
+                "输入格式", "输出格式", "输入样例", "输出样例",
+                "函数接口定义", "裁判测试程序样例", "函数接口", "样例", "示例",
+                "要求", "说明", "范围", "解题思路", "提示"
+        };
+        for (String heading : headings) {
+            if (compact.equals(heading) || compact.matches("^" + heading + "\\d+$")) {
+                if ("函数接口".equals(heading)) return "函数接口定义";
+                return normalized;
+            }
+        }
+        return "";
+    }
+
+    private String cleanupSectionBody(String value) {
+        String text = value == null ? "" : value.replace("\r\n", "\n").replace('\r', '\n');
+        text = text.replaceAll("(?m)^\\s*(复制内容|格式|全屏)\\s*$", "");
+        text = text.replaceAll("(?m)^\\s*$\\n?", "\n");
+        text = text.replaceAll("\\n{3,}", "\n\n");
+        return trimTrailingBlankLines(text);
+    }
+
+    private boolean shouldRenderCodeSection(String title, String body) {
+        String name = title == null ? "" : title;
+        if (name.contains("样例") || name.contains("示例") || name.contains("接口")
+                || name.contains("裁判") || name.contains("程序")) {
+            return true;
+        }
+        return looksLikeCodeBlock(body);
+    }
+
+    private boolean looksLikeCodeBlock(String body) {
+        String[] lines = (body == null ? "" : body).replace("\r\n", "\n").replace('\r', '\n').split("\n");
+        int signal = 0;
+        int nonEmpty = 0;
+        for (String raw : lines) {
+            String line = raw == null ? "" : raw.trim();
+            if (line.length() == 0) continue;
+            nonEmpty++;
+            if (line.startsWith("class ") || line.startsWith("def ") || line.startsWith("return ")
+                    || line.startsWith("import ") || line.startsWith("from ") || line.startsWith("for ")
+                    || line.startsWith("while ") || line.startsWith("if ") || line.startsWith("elif ")
+                    || line.startsWith("else:") || line.startsWith("#") || line.contains("input(")
+                    || line.contains("print(") || line.contains("__init__") || line.contains(" = ")) {
+                signal++;
+            }
+        }
+        return signal > 0 && (signal * 2 >= nonEmpty || nonEmpty <= 3);
+    }
+
+    private String codeFenceLanguage(String title, String body) {
+        String text = (title == null ? "" : title) + "\n" + (body == null ? "" : body);
+        if (text.contains("input(") || text.contains("print(") || text.contains("class ") || text.contains("def ")) {
+            return "python";
+        }
+        return "";
+    }
+
+    private String stripPtaLineNumbers(String body) {
+        String[] rawLines = (body == null ? "" : body).replace("\r\n", "\n").replace('\r', '\n').split("\n");
+        List<String> lines = new ArrayList<>();
+        for (String raw : rawLines) {
+            lines.add(raw == null ? "" : raw);
+        }
+        while (!lines.isEmpty() && lines.get(0).trim().length() == 0) {
+            lines.remove(0);
+        }
+        int index = 0;
+        while (index < lines.size()) {
+            String trimmed = lines.get(index).trim();
+            String expected = String.valueOf(index + 1);
+            if (!expected.equals(trimmed)) break;
+            index++;
+        }
+        if (index > 0 && lines.size() > index) {
+            lines = new ArrayList<>(lines.subList(index, lines.size()));
+        }
+        while (!lines.isEmpty() && lines.get(lines.size() - 1).trim().length() == 0) {
+            lines.remove(lines.size() - 1);
+        }
+        return join(lines, "\n");
+    }
+
+    private void appendReadableParagraphs(StringBuilder sb, String body) {
+        String[] blocks = body.split("\\n\\s*\\n");
+        for (String block : blocks) {
+            String text = block == null ? "" : block.trim();
+            if (text.length() == 0) continue;
+            String[] lines = text.split("\n");
+            boolean listLike = lines.length > 1 && looksLikeListLines(lines);
+            if (listLike) {
+                for (String line : lines) {
+                    String item = line.trim();
+                    if (item.length() == 0) continue;
+                    String clean = item.replaceFirst("^([\\-•·]\\s*|[0-9]+[）).、]\\s*)", "");
+                    sb.append("- ").append(clean).append("\n");
+                }
+                sb.append("\n");
+            } else {
+                sb.append(text.replace("\n", "\n")).append("\n\n");
+            }
+        }
+    }
+
+    private boolean looksLikeListLines(String[] lines) {
+        int listCount = 0;
+        int nonEmpty = 0;
+        for (String line : lines) {
+            String item = line == null ? "" : line.trim();
+            if (item.length() == 0) continue;
+            nonEmpty++;
+            if (item.matches("^([0-9]+[）\\).、]|[-•·]).*")) {
+                listCount++;
+            }
+        }
+        return nonEmpty > 0 && listCount * 2 >= nonEmpty;
     }
 
     private void renderQuestionMarkdown(LinearLayout container, String markdown, Question q) {
@@ -4526,7 +4747,11 @@ public class MainActivity extends Activity {
     }
 
     private void renderEssayActions(final Question q) {
+        if (rememberMode) {
+            return;
+        }
         renderEssayActionsInto(q, optionList);
+        addQuestionBottomSpacer(optionList);
     }
 
     private void renderEssayActionsInto(final Question q, LinearLayout target) {
@@ -4549,6 +4774,12 @@ public class MainActivity extends Activity {
         TextView hint = text("大题不会自动判分。先看答案，再按自己的掌握程度点“会了 / 不会”。", 13, MUTED, false);
         hint.setLineSpacing(dp(3), 1.0f);
         target.addView(hint, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    private void addQuestionBottomSpacer(LinearLayout target) {
+        if (target == null) return;
+        View spacer = new View(this);
+        target.addView(spacer, new LinearLayout.LayoutParams(-1, dp(128)));
     }
 
     private void showEssayAnswer(final Question q) {
@@ -5230,6 +5461,13 @@ public class MainActivity extends Activity {
 
         TextView tv = text("", 13, TEXT, false);
         tv.setTypeface(Typeface.MONOSPACE);
+        tv.setHorizontallyScrolling(true);
+        tv.setSingleLine(false);
+        tv.setTextAlignment(View.TEXT_ALIGNMENT_TEXT_START);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            tv.setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE);
+            tv.setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE);
+        }
         tv.setText(trimTrailingBlankLines(value == null ? "" : value));
         tv.setTextIsSelectable(true);
         tv.setIncludeFontPadding(true);
@@ -9306,6 +9544,15 @@ public class MainActivity extends Activity {
         final List<String> images = new ArrayList<>();
         final List<String> stemImages = new ArrayList<>();
         final List<String> answerImages = new ArrayList<>();
+    }
+
+    private static class ProblemSection {
+        final String title;
+        StringBuilder body = new StringBuilder();
+
+        ProblemSection(String title) {
+            this.title = title == null ? "" : title.trim();
+        }
     }
 
     private static class Option {

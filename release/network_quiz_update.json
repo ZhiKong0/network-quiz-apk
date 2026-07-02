@@ -1,16 +1,16 @@
 {
   "packageName": "com.dz.networkquiz",
-  "versionCode": 93,
-  "versionName": "2.10.68",
+  "versionCode": 94,
+  "versionName": "2.10.69",
   "apkFileName": "exam-prep-handbook.apk",
-  "apkDownloadUrl": "https://ghfast.top/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.68/exam-prep-handbook.apk",
+  "apkDownloadUrl": "https://ghfast.top/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.69/exam-prep-handbook.apk",
   "apkDownloadCandidates": [
-    "https://ghfast.top/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.68/exam-prep-handbook.apk",
+    "https://ghfast.top/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.69/exam-prep-handbook.apk",
     "https://ghfast.top/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/latest/download/exam-prep-handbook.apk"
   ],
-  "releaseHtmlUrl": "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/tag/v2.10.68",
-  "releaseNotes": "# v2.10.68\n\n- 数据结构课程合并本地已抓到的全部 PTA 数据结构题集，题库从 239 题扩展到 460 题。\n- 覆盖题集包括：线性数据结构、自测5 填空题、自测题6 客观题、二叉搜索树、练习题6 使用1/使用2、编程题2 练习题。\n- 保留 PTA 随机复习套卷里的重复题干，不擅自删除套卷题；合并后去重题干数为 221。\n- 修正程序填空题兼容逻辑：程序填空继续按填空题刷，函数题/编程题才按参考答案题显示。",
-  "apkSize": 34902625,
-  "sha256": "874d2450a1a1b8d34eba14c3ecdcc86b209ddf41f0d8826e6cd3a45c67f93cbc",
-  "generatedAt": "2026-07-02T12:09:34.164204+00:00"
+  "releaseHtmlUrl": "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/tag/v2.10.69",
+  "releaseNotes": "# v2.10.69\n\n- 数据结构课程恢复为李俊老师图片中那批 PTA 复习题，共 239 题，不再使用后续合并的 460 题全集。\n- 题型保持为：判断题 120、单选题 100、函数题 4、编程题 15，章节导图继续覆盖 5 个数据结构复习章节。\n- 保留函数题/编程题的大题式答案显示，并优化程序题题干分段、代码块和样例的阅读效果。",
+  "apkSize": 34869856,
+  "sha256": "b1c5709a3a1cd2925427d32f9f4041af042a44a900d2d315925535d46b78040a",
+  "generatedAt": "2026-07-02T15:53:36.873092+00:00"
 }
