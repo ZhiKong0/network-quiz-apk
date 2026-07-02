@@ -8,9 +8,9 @@
     "https://ghfast.top/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/download/v2.10.68/exam-prep-handbook.apk",
     "https://ghfast.top/https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/latest/download/exam-prep-handbook.apk"
   ],
-  "releaseHtmlUrl": "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/latest",
+  "releaseHtmlUrl": "https://github.com/ZhiKong0/exam-prep-handbook-apk/releases/tag/v2.10.68",
   "releaseNotes": "# v2.10.68\n\n- 数据结构课程合并本地已抓到的全部 PTA 数据结构题集，题库从 239 题扩展到 460 题。\n- 覆盖题集包括：线性数据结构、自测5 填空题、自测题6 客观题、二叉搜索树、练习题6 使用1/使用2、编程题2 练习题。\n- 保留 PTA 随机复习套卷里的重复题干，不擅自删除套卷题；合并后去重题干数为 221。\n- 修正程序填空题兼容逻辑：程序填空继续按填空题刷，函数题/编程题才按参考答案题显示。",
   "apkSize": 34902625,
-  "sha256": "f25607b68f52ecc1c10f92a6a6b447d9701446c58b15b0cdd73ed95c661ba076",
-  "generatedAt": "2026-07-02T12:06:38.619743+00:00"
+  "sha256": "874d2450a1a1b8d34eba14c3ecdcc86b209ddf41f0d8826e6cd3a45c67f93cbc",
+  "generatedAt": "2026-07-02T12:09:34.164204+00:00"
 }
